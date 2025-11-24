@@ -1,0 +1,223 @@
+/* =========================================================
+   DETALLE DE PRODUCTO — Modas Pathy
+   Archivo: static/css/producto_detalle.css
+   ========================================================= */
+
+.product-detail-page{
+  --radius-xl: 1.25rem;
+  --radius-lg: 1rem;
+}
+
+.product-detail-page .breadcrumb{
+  --bs-breadcrumb-divider: "›";
+  font-weight: 600;
+}
+.product-detail-page .breadcrumb a{
+  text-decoration: none;
+  color: var(--text-color);
+  opacity: .75;
+  transition: color .2s ease, opacity .2s ease;
+}
+.product-detail-page .breadcrumb a:hover{
+  color: var(--primary);
+  opacity: 1;
+}
+
+/* ---------- Galería ---------- */
+.product-gallery{
+  border: none;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+  transition: transform .35s ease, box-shadow .35s ease;
+}
+.product-gallery:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0,0,0,.10);
+}
+
+.gallery-main{
+  background: linear-gradient(180deg, rgba(0,0,0,.03), transparent);
+}
+.gallery-main img{
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  transition: transform .6s ease, filter .6s ease, opacity .2s ease;
+}
+.gallery-main img.cursor-zoom:hover{
+  transform: scale(1.04);
+  filter: saturate(1.05);
+}
+#mainImage.img-switching{
+  opacity: .35;
+  transform: scale(0.98);
+}
+
+/* Miniaturas */
+.thumbs{
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+  gap: .5rem;
+  padding: .75rem;
+  background: #fff;
+  border-top: 1px solid rgba(0,0,0,.05);
+}
+
+.thumb-img{
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: .75rem;
+  border: 2px solid transparent;
+  opacity: .85;
+  transition: border-color .25s ease, transform .25s ease, opacity .25s ease, box-shadow .25s ease;
+  cursor: pointer;
+}
+.thumb-img:hover{
+  opacity: 1;
+  transform: translateY(-2px);
+}
+.thumb-img.active{
+  border-color: var(--primary);
+  opacity: 1;
+  transform: scale(1.02);
+  box-shadow: 0 6px 14px rgba(0,0,0,.12);
+}
+
+/* ---------- Info ---------- */
+.product-info-card{
+  border: none;
+  border-radius: var(--radius-xl);
+  background: rgba(255,255,255,.95);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.06);
+}
+
+@media (min-width: 992px){
+  .product-info-card{
+    position: sticky;
+    top: 90px;
+  }
+}
+
+.product-info-card h1,
+.product-info-card .h4{
+  font-weight: 700;
+  letter-spacing: .2px;
+}
+
+.product-price{
+  font-size: 1.9rem;
+}
+
+.product-category-pill{
+  display: inline-flex;
+  align-items: center;
+  margin-left: .5rem;
+  padding: .2rem .65rem;
+  border-radius: 999px;
+  background: var(--accent-light);
+  color: var(--primary);
+  font-weight: 700;
+  font-size: .85rem;
+}
+
+/* Badges con entrada suave */
+.product-badges .badge{
+  font-weight: 700;
+  letter-spacing: .3px;
+  padding: .45rem .7rem;
+  animation: badgePop .6s ease both;
+}
+.product-badges .badge:nth-child(2){ animation-delay: .08s; }
+.product-badges .badge:nth-child(3){ animation-delay: .16s; }
+
+@keyframes badgePop{
+  from{ transform: translateY(6px); opacity: 0; }
+  to{ transform: translateY(0); opacity: 1; }
+}
+
+.product-description{
+  font-size: 1.02rem;
+  color: var(--text-color);
+  opacity: .95;
+}
+
+/* CTA botones */
+.cta-row .btn{
+  border-radius: 999px;
+  box-shadow: 0 8px 18px rgba(0,0,0,.08);
+  transition: transform .25s ease, box-shadow .25s ease, filter .25s ease;
+}
+.cta-row .btn:hover{
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0,0,0,.12);
+  filter: saturate(1.05);
+}
+.cta-row .btn-success{
+  background: linear-gradient(135deg, var(--success), var(--primary));
+  border: none;
+}
+.cta-row .btn-outline-primary{
+  border-width: 2px;
+}
+
+/* Lista de beneficios */
+.feature-list{
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-top: .25rem;
+}
+.feature-item{
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .45rem .7rem;
+  border-radius: .8rem;
+  background: #fff;
+  color: #555;
+  font-size: .9rem;
+  box-shadow: 0 4px 10px rgba(0,0,0,.04);
+}
+
+/* ---------- Lightbox ---------- */
+.lightbox{
+  position: fixed;
+  inset: 0;
+  background: rgba(8,10,14,.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  z-index: 1055;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s ease;
+}
+.lightbox:not(.d-none){
+  opacity: 1;
+  pointer-events: auto;
+}
+.lightbox img{
+  max-width: min(1100px, 100%);
+  max-height: 85vh;
+  border-radius: 1rem;
+  transform: scale(.98);
+  transition: transform .25s ease;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.lightbox:not(.d-none) img{
+  transform: scale(1);
+}
+
+/* Ajustes móviles */
+@media (max-width: 576px){
+  .product-price{ font-size: 1.6rem; }
+  .cta-row .btn{ width: 100%; justify-content: center; }
+  .thumbs{ grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); }
+}

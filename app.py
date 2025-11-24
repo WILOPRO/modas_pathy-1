@@ -1,3 +1,4 @@
+from werkzeug.security import generate_password_hash, check_password_hash
 from flask import Flask, render_template, redirect, url_for, flash, request, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user, UserMixin
@@ -20,6 +21,9 @@ from datetime import datetime
 from sqlalchemy import or_
 import random
 import os
+import re
+from flask import Response
+
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -174,46 +178,45 @@ class ContactForm(FlaskForm):
     address  = StringField('Dirección', validators=[Optional(), Length(max=256)])
     submit   = SubmitField('Guardar')
 
+
 # --- CONTEXT PROCESSOR para notificaciones globales ---
+
+def _slugify(text):
+    t = re.sub(r'[^\w\s-]', '', text, flags=re.UNICODE).strip().lower()
+    t = re.sub(r'[\s_-]+', '-', t)
+    return t
+
+@app.context_processor
+def inject_helpers():
+    return dict(slugify=_slugify)
+
+
+    
+
 @app.context_processor
 def inject_notifications():
     notifications = Notification.query.order_by(Notification.timestamp.desc()).limit(6).all()
     notifs = [
-        {
-            'message': n.message,
-            'timestamp': n.timestamp.strftime('%d/%m %H:%M'),
-            'admin_name': n.admin_name
-        }
+        {'message': n.message, 'timestamp': n.timestamp.strftime('%d/%m %H:%M'), 'admin_name': n.admin_name}
         for n in notifications
     ]
     return dict(notifications=notifs)
 
+
+
 @app.context_processor
 def inject_theme():
-    # Tema activo
     active = Theme.query.filter_by(is_default=True).first()
-    # Todos los temas disponibles
     all_themes = Theme.query.order_by(Theme.name).all()
-    return {
-        'active_theme': active,
-        'all_themes': all_themes
-    }
+    return {'active_theme': active, 'all_themes': all_themes}
 
 
-# ─── SEED DEFAULT THEMES ──────────────────────────────────────────────────────
 
-# ─── SEMILLA DE TEMAS (UNA SOLA VEZ) ────────────────────────────────────────────
-_seeded = False
-
-@app.before_request
 def seed_themes_once():
-    global _seeded
-
-    # 0) Asegura que todas las tablas estén creadas (incluyendo themes)
+    """Crea tablas y siembra temas/contacto solo si aún no existen."""
     db.create_all()
 
-    # 1) Solo corre una vez, y solo si no hay temas aún
-    if not _seeded and Theme.query.count() == 0:
+    if Theme.query.count() == 0:
         defaults = [
             ('Light',  '#8F2D56','#BF1E53','#25D366','#333333','#F8F9FA','#2A9D8F','#E63946'),
             ('Dark',   '#333333','#444444','#25D366','#FFFFFF','#222222','#2A9D8F','#E63946'),
@@ -221,27 +224,20 @@ def seed_themes_once():
             ('Mono',   '#000000','#444444','#888888','#FFFFFF','#EFEFEF','#2A9D8F','#E63946'),
             ('Sunset', '#FF7E5F','#FEB47B','#FFB85F','#333333','#FFF5E5','#2A9D8F','#E63946'),
         ]
-
         for i, (n, p, s, a, t, b, u, e) in enumerate(defaults):
             theme = Theme(
-                name       = n,
-                primary    = p,
-                secondary  = s,
-                accent     = a,
-                text_color = t,
-                bg_color   = b,
-                success    = u,
-                error      = e,
-                is_default = (i == 0)
+                name=n, primary=p, secondary=s, accent=a, text_color=t,
+                bg_color=b, success=u, error=e, is_default=(i == 0)
             )
             db.session.add(theme)
-        # Crea registro de contactos inicial si no existe
+
         if ContactInfo.query.count() == 0:
             db.session.add(ContactInfo())
-            db.session.commit()
 
         db.session.commit()
-        _seeded = True
+
+
+
 
 # --- RUTAS PÚBLICAS ---
 
@@ -270,8 +266,11 @@ def index():
 
 @app.route('/catalogo')
 def catalogo():
-    q = request.args.get('q', '').strip()
-    categoria_id = request.args.get('categoria', type=int)
+    q           = request.args.get('q', '', type=str).strip()
+    categoria_id= request.args.get('categoria', type=int)
+    sort        = request.args.get('sort', 'recientes', type=str)
+    page        = request.args.get('page', 1, type=int)
+    per_page    = request.args.get('per_page', 12, type=int)
 
     query = Product.query
     if categoria_id:
@@ -280,15 +279,36 @@ def catalogo():
         like = f"%{q}%"
         query = query.filter(or_(Product.name.ilike(like), Product.description.ilike(like)))
 
-    productos = query.order_by(Product.id.desc()).all()
+    # Orden
+    if sort == 'precio_asc':
+        query = query.order_by(Product.price.asc(), Product.id.desc())
+    elif sort == 'precio_desc':
+        query = query.order_by(Product.price.desc(), Product.id.desc())
+    elif sort == 'nombre_asc':
+        query = query.order_by(Product.name.asc())
+    elif sort == 'nombre_desc':
+        query = query.order_by(Product.name.desc())
+    else:  # recientes
+        query = query.order_by(Product.id.desc())
+
+    # Paginación
+    pagination = db.paginate(query, page=page, per_page=per_page, error_out=False)
+    productos  = pagination.items
+
     categoria = Category.query.get(categoria_id) if categoria_id else None
+    categorias = Category.query.order_by(Category.name).all()
 
     return render_template(
         'public/catalogo.html',
         productos=productos,
         categoria=categoria,
-        search=q
+        categorias=categorias,
+        search=q,
+        sort=sort,
+        pagination=pagination,
+        per_page=per_page
     )
+
 
 @app.route('/quienes-somos')
 def quienes_somos():
@@ -298,11 +318,40 @@ def quienes_somos():
 def contacto():
     return render_template('public/contacto.html')
 
+
+@app.route('/p/<slug>-<int:id>')
+def producto_seo(slug, id):
+    producto = Product.query.get_or_404(id)
+    return render_template('public/producto_detalle.html', producto=producto)
+
 # Página de detalle de producto
 @app.route('/producto/<int:id>')
 def producto_detalle(id):
     producto = Product.query.get_or_404(id)
-    return render_template('public/producto_detalle.html', producto=producto)
+    return redirect(url_for('producto_seo', id=id, slug=_slugify(producto.name)), code=301)
+
+
+@app.route('/robots.txt')
+def robots_txt():
+    from flask import request
+    base = request.url_root.rstrip('/')
+    content = f"User-agent: *\nAllow: /\nSitemap: {base}/sitemap.xml\n"
+    return Response(content, mimetype='text/plain')
+
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    from flask import request
+    base = request.url_root.rstrip('/')
+    static_pages = ['index', 'catalogo', 'quienes_somos', 'contacto']
+    urls = []
+    for name in static_pages:
+        urls.append(f"<url><loc>{base}{url_for(name)}</loc></url>")
+    for p in Product.query.order_by(Product.id.desc()).all():
+        loc = f"{base}{url_for('producto_seo', id=p.id, slug=_slugify(p.name))}"
+        urls.append(f"<url><loc>{loc}</loc></url>")
+    xml = "<?xml version='1.0' encoding='UTF-8'?>\n<urlset xmlns='http://www.sitemaps.org/schemas/sitemap/0.9'>\n" + "\n".join(urls) + "\n</urlset>"
+    return Response(xml, mimetype='application/xml')
 
 # --- AUTENTICACIÓN ADMIN ---
 
@@ -314,11 +363,39 @@ def load_user(user_id):
 def admin_login():
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and user.password == form.password.data:
+        username = form.username.data.strip()
+        password = form.password.data
+
+        user = User.query.filter_by(username=username).first()
+        if not user:
+            flash('Usuario o contraseña inválidos', 'danger')
+            return render_template('admin/login.html', form=form)
+
+        stored = (user.password or "").strip()
+
+        # 1) Intento robusto: probar hash (sea scrypt, pbkdf2, etc.)
+        try:
+            if stored and (stored.startswith('scrypt:') or stored.startswith('pbkdf2:') or ':' in stored):
+                if check_password_hash(stored, password):
+                    login_user(user)
+                    flash('¡Bienvenido!', 'success')
+                    return redirect(url_for('admin_dashboard'))
+        except Exception:
+            # Si fallara por formato inesperado del hash, seguimos a texto plano
+            pass
+
+        # 2) Compatibilidad con contraseñas antiguas en texto plano
+        if stored and stored == password:
+            user.password = generate_password_hash(password)
+            db.session.commit()
             login_user(user)
+            flash('¡Bienvenido! (tu contraseña fue actualizada de forma segura)', 'success')
             return redirect(url_for('admin_dashboard'))
+
+        # 3) Error
         flash('Usuario o contraseña inválidos', 'danger')
+        return render_template('admin/login.html', form=form)
+
     return render_template('admin/login.html', form=form)
 
 @app.route('/admin/logout')
@@ -564,7 +641,7 @@ def admin_profile_edit():
             form.profile_image.data.save(filepath)
             current_user.profile_image = filename
         if form.password.data:
-            current_user.password = form.password.data
+            current_user.password = generate_password_hash(form.password.data)
         db.session.commit()
         flash('Perfil actualizado correctamente', 'success')
         return redirect(url_for('admin_profile'))
@@ -585,6 +662,10 @@ def admin_usuario_nuevo():
         if User.query.filter_by(username=form.username.data).first():
             flash('Ya existe un usuario con ese nombre', 'danger')
         else:
+            # Validar que venga contraseña al crear (no permitir vacía)
+            if not form.password.data:
+                flash('Debes especificar una contraseña para el nuevo administrador.', 'danger')
+                return render_template('admin/usuario_form.html', form=form, nuevo=True)
             filename = None
             if form.profile_image.data:
                 filename = f"profile_{form.username.data}_{secure_filename(form.profile_image.data.filename)}"
@@ -593,7 +674,7 @@ def admin_usuario_nuevo():
             user = User(
                 username=form.username.data,
                 name=form.name.data,
-                password=form.password.data if form.password.data else "",
+                password=generate_password_hash(form.password.data),
                 is_superadmin=(form.is_superadmin.data == '1'),
                 profile_image=filename
             )
@@ -631,7 +712,7 @@ def admin_usuario_editar(id):
         user.name = form.name.data
         user.username = form.username.data
         if form.password.data:
-            user.password = form.password.data
+            user.password = generate_password_hash(form.password.data)
         user.is_superadmin = (form.is_superadmin.data == '1')
         db.session.commit()
         db.session.add(Notification(
@@ -788,9 +869,13 @@ def handle_file_too_large(e):
     flash('El archivo seleccionado supera el límite permitido.', 'danger')
     return redirect(request.referrer or url_for('admin_dashboard'))
 
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('404.html'), 404
+
 # --- CREACIÓN DE LA BD Y ARRANQUE ---
 if __name__ == '__main__':
-    if not os.path.exists('modas_pathy.db'):
-        with app.app_context():
-            db.create_all()
+    with app.app_context():
+        # Crea la base si no existe y siembra datos una sola vez
+        seed_themes_once()
     app.run(host='0.0.0.0', port=5000, debug=True)

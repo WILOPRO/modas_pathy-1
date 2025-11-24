@@ -4,15 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{% block title %}Tienda virtual Modas Pathy{% endblock %}</title>
+
   <link rel="shortcut icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon"/>
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"/>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css"/>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
-  
-   
+
+  {% block styles %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+  {% endblock %}
+
   <style>
     :root {
       --primary:      {{ active_theme.primary }};
@@ -29,10 +32,9 @@
         0.08
       );
     }
-
   </style>
-
 </head>
+
 <body>
   <!-- HEADER FIJO -->
   <header class="navbar navbar-light bg-white border-bottom fixed-top shadow-sm">
@@ -41,6 +43,7 @@
       <button id="sidebarToggle" class="btn btn-outline-secondary me-3" aria-label="Toggle sidebar">
         <i class="bi bi-list"></i>
       </button>
+
       <!-- LOGO -->
       <a href="{{ url_for('index') }}" class="navbar-brand d-flex align-items-center mb-0 h1" style="gap:10px;">
         <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" height="36" class="d-inline-block align-text-top">
@@ -59,6 +62,7 @@
           <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-search"></i></button>
         </form>
       </div>
+
       <ul class="nav flex-column px-3">
         <li class="nav-item mb-1">
           <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
@@ -80,6 +84,7 @@
             <i class="bi bi-telephone me-2"></i>Contacto
           </a>
         </li>
+
         <!-- Categorías colapsable -->
         <li class="nav-item mt-3">
           <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#collapseCategories" role="button" aria-expanded="false" aria-controls="collapseCategories">
@@ -98,37 +103,39 @@
             </ul>
           </div>
         </li>
-        
       </ul>
     </nav>
 
     <!-- CONTENIDO PRINCIPAL -->
     <main class="flex-grow-1" style="background: var(--bg-color) !important;">
       <div class="container-fluid mt-5 pt-4">
-        <!-- Título de página -->
         <h1 class="mb-4">{% block page_title %}{% endblock %}</h1>
-        <!-- Contenido principal -->
         {% block content %}{% endblock %}
       </div>
     </main>
   </div>
-  
 
-  <!-- Bootstrap JS + Toggle -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-  <script>
-    document.getElementById('sidebarToggle').addEventListener('click', () => {
-      document.getElementById('sidebarMenu').classList.toggle('show');
-    });
-  </script>
+  {% block scripts %}
+    <!-- Bootstrap JS + Toggle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <script>
+      document.getElementById('sidebarToggle').addEventListener('click', () => {
+        document.getElementById('sidebarMenu').classList.toggle('show');
+      });
+    </script>
 
     <!-- GSAP + ScrollTrigger -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
-  <!-- Tilt effect -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.7.2/vanilla-tilt.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
-  <!-- Tu JS principal -->
-  <script src="{{ url_for('static', filename='js/public.js') }}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+
+    <!-- Tilt effect -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.7.2/vanilla-tilt.min.js"></script>
+
+    <!-- AOS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
+
+    <!-- Tu JS principal -->
+    <script src="{{ url_for('static', filename='js/public.js') }}"></script>
+  {% endblock %}
 </body>
 </html>

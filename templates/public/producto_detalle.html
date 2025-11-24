@@ -1,55 +1,136 @@
-{% extends 'public/base.html' %}
+{% extends "public/base.html" %}
 
 {% block title %}{{ producto.name }} — Modas Pathy{% endblock %}
 {% block page_title %}{{ producto.name }}{% endblock %}
 
+{% block styles %}
+  {{ super() }}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/producto_detalle.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container px-0">
-  <div class="card product-detail-card border-0 shadow-lg" data-aos="fade-up">
-    <div class="row g-4 align-items-start">
-      <div class="col-md-6">
-        <div class="product-detail-gallery">
-          <div id="carouselProducto" class="carousel slide" data-bs-ride="carousel">
-            <div class="carousel-inner">
-              {% for img in producto.images %}
-              <div class="carousel-item {% if loop.first %}active{% endif %}">
-                <img src="{{ url_for('static', filename='uploads/' ~ img.filename) }}" class="d-block w-100" alt="{{ producto.name }}">
-              </div>
-              {% endfor %}
+<div class="container py-2 product-detail-page">
+
+  <!-- migas -->
+  <nav aria-label="breadcrumb" class="mb-3" data-aos="fade-down">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('catalogo') }}">Catálogo</a></li>
+      <li class="breadcrumb-item active" aria-current="page">{{ producto.name }}</li>
+    </ol>
+  </nav>
+
+  <div class="row g-4 align-items-start">
+    <!-- Galería -->
+    <div class="col-12 col-lg-6" data-aos="fade-right">
+      {% set mains = producto.images|selectattr('is_main')|list %}
+      {% set main_img = (mains[0] if mains else (producto.images[0] if producto.images else None)) %}
+
+      <div class="product-gallery card shadow-sm">
+        <div class="ratio ratio-1x1 gallery-main p-2">
+          {% if main_img %}
+            <img id="mainImage"
+                 src="{{ url_for('static', filename='uploads/' ~ main_img.filename) }}"
+                 alt="{{ producto.name }}"
+                 class="img-fluid rounded object-fit-cover cursor-zoom"
+                 data-zoom="{{ url_for('static', filename='uploads/' ~ main_img.filename) }}">
+          {% else %}
+            <div class="d-flex align-items-center justify-content-center bg-light rounded">
+              <span class="text-muted">Sin imágenes</span>
             </div>
-            <button class="carousel-control-prev" type="button" data-bs-target="#carouselProducto" data-bs-slide="prev">
-              <span class="carousel-control-prev-icon"></span>
+          {% endif %}
+        </div>
+
+        {% if producto.images %}
+        <div class="thumbs">
+          {% for img in producto.images %}
+            <button class="thumb btn p-0 border-0" type="button"
+                    data-src="{{ url_for('static', filename='uploads/' ~ img.filename) }}"
+                    aria-label="Imagen {{ loop.index }}">
+              <img src="{{ url_for('static', filename='uploads/' ~ img.filename) }}"
+                   class="thumb-img {% if main_img and img.id == main_img.id %}active{% endif %}"
+                   alt="{{ producto.name }} - {{ loop.index }}">
             </button>
-            <button class="carousel-control-next" type="button" data-bs-target="#carouselProducto" data-bs-slide="next">
-              <span class="carousel-control-next-icon"></span>
-            </button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="col-12 col-lg-6" data-aos="fade-left">
+      <div class="card product-info-card shadow-sm h-100">
+        <div class="card-body d-flex flex-column">
+
+          <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+            <!-- OJO: acá ya uso h2 porque el h1 está arriba en page_title -->
+            <h2 class="h4 mb-0">{{ producto.name }}</h2>
+
+            <div class="d-flex gap-2 product-badges">
+              {% if producto.is_new %}
+                <span class="badge rounded-pill bg-primary-subtle text-primary">Novedad</span>
+              {% endif %}
+              {% if producto.is_trending %}
+                <span class="badge rounded-pill bg-warning-subtle text-warning">Tendencia</span>
+              {% endif %}
+              {% if producto.is_featured %}
+                <span class="badge rounded-pill bg-success-subtle text-success">Destacado</span>
+              {% endif %}
+            </div>
           </div>
+
+          <div class="mt-3">
+            <span class="h5 text-danger fw-bold product-price">
+              Bs {{ '%.2f'|format(producto.price) }}
+            </span>
+
+            {% if producto.category %}
+              <span class="product-category-pill">{{ producto.category.name }}</span>
+            {% endif %}
+          </div>
+
+          {% if producto.description %}
+            <p class="mt-3 mb-0 lh-base product-description">{{ producto.description }}</p>
+          {% else %}
+            <p class="mt-3 mb-0 text-muted product-description">Sin descripción.</p>
+          {% endif %}
+
+          <div class="cta-row mt-4 d-flex flex-wrap gap-2">
+            {% set wsp = contact_info.whatsapp if contact_info and contact_info.whatsapp else None %}
+            {% if wsp %}
+              {% set wspMsg = 'Hola, me interesa el producto: ' ~ producto.name ~ ' (ID ' ~ producto.id ~ ')' %}
+              <a class="btn btn-success btn-lg px-4" target="_blank"
+                 href="https://wa.me/{{ wsp | replace('+','') | replace(' ','') }}?text={{ wspMsg | urlencode }}">
+                <i class="bi bi-whatsapp me-1"></i> Comprar por WhatsApp
+              </a>
+            {% endif %}
+
+            <a class="btn btn-outline-primary btn-lg px-4" href="{{ url_for('catalogo') }}">
+              <i class="bi bi-arrow-left me-1"></i> Volver al catálogo
+            </a>
+          </div>
+
+          <hr class="my-4">
+          <div class="feature-list">
+            <span class="feature-item"><i class="bi bi-shield-check me-1"></i> Compra segura</span>
+            <span class="feature-item"><i class="bi bi-truck me-1"></i> Envíos a todo el país</span>
+            <span class="feature-item"><i class="bi bi-arrow-repeat me-1"></i> Cambios y devoluciones</span>
+          </div>
+
         </div>
       </div>
-      <div class="col-md-6">
-        <h3 class="text-capitalize">{{ producto.name }}</h3>
-        <p class="lead fw-bold">Bs {{ '%.2f'|format(producto.price) }}</p>
-        <p class="mb-4">{{ producto.description }}</p>
-        <form id="orderForm" action="https://wa.me/{{ contact_info.whatsapp|replace(' ', '') }}" method="get" target="_blank">
-          <div class="mb-3">
-            <label for="colorSelect" class="form-label">Color</label>
-            <select id="colorSelect" class="form-select">
-              <option value="Rojo">Rojo</option>
-              <option value="Azul">Azul</option>
-              <option value="Verde">Verde</option>
-              <option value="Negro">Negro</option>
-              <option value="Blanco">Blanco</option>
-            </select>
-          </div>
-          {% set main = producto.images|selectattr('is_main')|first or producto.images[0] %}
-          {% set img_url = url_for('static', filename='uploads/' ~ main.filename, _external=True) %}
-          <input type="hidden" name="text" id="wa_text" value="Hola, quiero el producto {{ producto.name }} COLOR_PLACEHOLDER {{ img_url }}">
-          <button type="submit" id="whatsappOrderBtn" class="btn btn-success btn-feedback w-100">
-            <i class="bi bi-whatsapp"></i> Pedir ahora
-          </button>
-        </form>
-      </div>​​
-    </div>​​
-  </div>​​
+    </div>
+  </div>
 </div>
+
+<!-- Lightbox -->
+<div id="lightbox" class="lightbox d-none" role="dialog" aria-modal="true" aria-label="Vista de imagen">
+  <button class="btn-close position-absolute top-0 end-0 m-3" aria-label="Cerrar"></button>
+  <img id="lightboxImg" alt="imagen ampliada">
+</div>
+{% endblock %}
+
+{% block scripts %}
+  {{ super() }}
+  <script src="{{ url_for('static', filename='js/product.js') }}"></script>
 {% endblock %}
