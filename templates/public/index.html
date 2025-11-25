@@ -1,126 +1,444 @@
-{# templates/public/index.html #}
 {% extends 'public/base.html' %}
 
 {% block title %}Inicio — Modas Pathy{% endblock %}
-{% block page_title %}Inicio{% endblock %}
+{% block page_title %}{% endblock %}
 
 {% block content %}
-  <style>
+<style>
+  /* Hero Section */
+  .hero-section {
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    color: white;
+    padding: 3rem 2rem;
+    border-radius: 1.5rem;
+    margin-bottom: 3rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    animation: fadeInDown 0.8s ease;
+  }
+
+  .hero-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+    animation: rotate 20s linear infinite;
+  }
+
+  @keyframes rotate {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .hero-section .content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .hero-section h1 {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    animation: fadeInUp 0.8s ease 0.2s both;
+  }
+
+  .hero-section .lead {
+    font-size: 1.2rem;
+    font-weight: 500;
+    margin-bottom: 2rem;
+    opacity: 0.95;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    animation: fadeInUp 0.8s ease 0.4s both;
+  }
+
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .hero-section .btn {
+    animation: fadeInUp 0.8s ease 0.6s both;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Wrapper mejorado para carousels */
+  .carousel-wrapper {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 1.5rem;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    height: 100%;
+    transition: all 0.3s ease;
+  }
+
+  .carousel-wrapper:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  }
+
+  .carousel-wrapper h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1rem;
+    text-align: center;
+    position: relative;
+  }
+
+  .carousel-wrapper h3::after {
+    content: '';
+    display: block;
+    width: 50px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    margin: 0.5rem auto 0;
+    border-radius: 2px;
+  }
+
+  /* Img wrapper con blur background */
+  .img-wrapper {
+    position: relative;
+    width: 100%;
+    height: 380px;
+    overflow: hidden;
+    background: #f8f9fa;
+    border-radius: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .img-wrapper::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: var(--bg-img);
+    background-size: cover;
+    background-position: center;
+    filter: blur(20px);
+    transform: scale(1.1);
+    z-index: 0;
+  }
+
+  .img-wrapper img {
+    position: relative;
+    z-index: 1;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .carousel-item:hover .img-wrapper img {
+    transform: scale(1.08);
+  }
+
+  /* Caption mejorado */
+  .carousel-caption {
+    z-index: 2;
+    background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.75));
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 2rem 1rem 1.5rem;
+    border-radius: 0 0 1.25rem 1.25rem;
+  }
+
+  .carousel-caption h5 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    margin-bottom: 0.5rem;
+  }
+
+  .carousel-caption p {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #25d366;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Controles del carousel */
+  .carousel-control-prev,
+  .carousel-control-next {
+    width: 45px;
+    height: 45px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
+    border-radius: 50%;
+    opacity: 0;
+    transition: all 0.3s ease;
+  }
+
+  .carousel:hover .carousel-control-prev,
+  .carousel:hover .carousel-control-next {
+    opacity: 1;
+  }
+
+  .carousel-control-prev {
+    left: 10px;
+  }
+
+  .carousel-control-next {
+    right: 10px;
+  }
+
+  .carousel-control-prev:hover,
+  .carousel-control-next:hover {
+    background: rgba(0, 0, 0, 0.8);
+    transform: translateY(-50%) scale(1.1);
+  }
+
+  /* Section titles */
+  .section-title {
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--text-color);
+    margin-bottom: 2rem;
+    text-align: center;
+    position: relative;
+    display: inline-block;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: linear-gradient(90deg, var(--primary), var(--accent));
+    border-radius: 2px;
+  }
+
+  /* Contact section mejorada */
+  .contact-section {
+    background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+    padding: 3rem 2rem;
+    border-radius: 1.5rem;
+    text-align: center;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+    border: 2px solid var(--gris-medio);
+    transition: all 0.3s ease;
+    animation: fadeInUp 0.8s ease;
+  }
+
+  .contact-section:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  }
+
+  .contact-section h2 {
+    color: var(--primary);
+    margin-bottom: 1rem;
+    font-weight: 800;
+  }
+
+  .contact-section p {
+    color: var(--text-color);
+    opacity: 0.9;
+    font-size: 1.1rem;
+    margin-bottom: 2rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 767px) {
+    .hero-section {
+      padding: 2rem 1.5rem;
+    }
+
+    .hero-section h1 {
+      font-size: 1.75rem;
+    }
+
+    .hero-section .lead {
+      font-size: 1rem;
+    }
+
     .img-wrapper {
-      
-      position: relative;
-      width: 100%;
-      height: 350px;
-      overflow: hidden;
-      background: #f8f9fa;
-      border-radius: 1.4rem 1.4rem 0 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      height: 300px;
     }
-    .img-wrapper::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image: var(--bg-img);
-      background-size: cover;
-      background-position: center;
-      filter: blur(15px);
-      transform: scale(1.1);
-      z-index: 0;
-    }
-    .img-wrapper img {
-      position: relative;
-      z-index: 1;   
-      max-width: 100%;
-      max-height: 100%;
-      object-fit: contain;
-      transition: transform .3s ease;
-    }
+
     .carousel-caption {
-
-      z-index: 2;
+      padding: 1.5rem 1rem 1rem;
     }
-    .hover-shadow:hover .img-wrapper img {
-      transform: scale(1.05);
+
+    .carousel-caption h5 {
+      font-size: 1rem;
     }
-  </style>
 
-  <div class="container">
-    <div class="row gy-5">
-      {% for title, list, cid in [
-        ('Novedad', novedades, 'carouselNovedades'),
-        ('Tendencia', tendencias, 'carouselTendencias'),
-        ('Destacado', destacados, 'carouselDestacados')
-      ] %}
-        <div class="col-md-4">
-          <h3 class="mb-3 text-center">{{ title }}</h3>
-          <div id="{{ cid }}" class="carousel slide" data-bs-ride="carousel" data-bs-interval="3000" data-bs-pause="false">
-            <div class="carousel-inner rounded-4 overflow-hidden shadow-sm">
-              {% for prod in list %}
-                <div class="carousel-item {% if loop.first %}active{% endif %}">
-                  {% set main = prod.images|selectattr('is_main')|first or prod.images[0] %}
+    .carousel-caption p {
+      font-size: 0.95rem;
+    }
 
-                  <div class="img-wrapper" style="--bg-img: url('{{ url_for('static', filename='uploads/' ~ main.filename) }}');">
-                    <img src="{{ url_for('static', filename='uploads/' ~ main.filename) }}"
-                         alt="{{ prod.name }}">
+    .section-title {
+      font-size: 1.5rem;
+    }
+
+    .contact-section {
+      padding: 2rem 1.5rem;
+    }
+  }
+
+  @media (max-width: 575px) {
+    .hero-section h1 {
+      font-size: 1.5rem;
+    }
+
+    .img-wrapper {
+      height: 250px;
+    }
+  }
+</style>
+
+<div class="container">
+  <!-- Hero Section -->
+  <div class="hero-section" data-aos="fade-down">
+    <div class="content">
+      <h1>¡Bienvenida a Modas Pathy!</h1>
+      <p class="lead">
+        Descubre la elegancia de la cholita boliviana con nuestras prendas de última tendencia. 
+        Telas finas, accesorios y todo lo que necesitas para lucir auténtica.
+      </p>
+      <a href="{{ url_for('catalogo') }}" class="btn btn-light btn-lg">
+        <i class="bi bi-bag-heart me-2"></i>Ver Catálogo
+      </a>
+    </div>
+  </div>
+
+  <!-- Carousels de Novedad, Tendencia, Destacado -->
+  <div class="row gy-4 mb-5">
+    {% for title, list, cid, icon, color in [
+      ('Novedad', novedades, 'carouselNovedades', 'bi-stars', 'primary'),
+      ('Tendencia', tendencias, 'carouselTendencias', 'bi-fire', 'warning'),
+      ('Destacado', destacados, 'carouselDestacados', 'bi-award', 'success')
+    ] %}
+      <div class="col-md-4" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 100 }}">
+        <div class="carousel-wrapper">
+          <h3>
+            <i class="bi {{ icon }} me-2 text-{{ color }}"></i>{{ title }}
+          </h3>
+          
+          {% if list %}
+            <div id="{{ cid }}" class="carousel slide" data-bs-ride="carousel" data-bs-interval="3500" data-bs-pause="false">
+              <div class="carousel-inner rounded-4 overflow-hidden">
+                {% for prod in list %}
+                  <div class="carousel-item {% if loop.first %}active{% endif %}">
+                    {% set main = prod.images|selectattr('is_main')|first or prod.images[0] %}
+                    <div class="img-wrapper" style="--bg-img: url('{{ url_for('static', filename='uploads/' ~ main.filename) }}');">
+                      <img src="{{ url_for('static', filename='uploads/' ~ main.filename) }}"
+                           alt="{{ prod.name }}"
+                           loading="lazy">
+                    </div>
+                    <div class="carousel-caption">
+                      <h5 class="mb-1 text-capitalize">{{ prod.name }}</h5>
+                      <p class="mb-0">Bs {{ '%.2f'|format(prod.price) }}</p>
+                    </div>
                   </div>
-                 <div class="carousel-caption d-none d-md-block bg-dark bg-opacity-50 rounded-3 p-2 text-center">
-                    <h5 class="mb-1 text-capitalize">{{ prod.name }}</h5>
-                    <p class="mb-0">Bs {{ '%.2f'|format(prod.price) }}</p>
-                  </div>                  
-
-                </div>
-                
-              {% endfor %}
+                {% endfor %}
+              </div>
+              
+              <button class="carousel-control-prev" type="button" data-bs-target="#{{ cid }}" data-bs-slide="prev" aria-label="Anterior">
+                <span class="carousel-control-prev-icon"></span>
+              </button>
+              <button class="carousel-control-next" type="button" data-bs-target="#{{ cid }}" data-bs-slide="next" aria-label="Siguiente">
+                <span class="carousel-control-next-icon"></span>
+              </button>
             </div>
+          {% else %}
+            <p class="text-muted text-center mt-4">No hay productos en esta categoría.</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <!-- Sección de Productos -->
+  <section class="mt-5">
+    <h2 class="section-title" data-aos="fade-up">Todos los Productos</h2>
+    
+    <div class="row g-4 mt-2">
+      {% for prod in productos %}
+        <div class="col-6 col-md-4 col-lg-3" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 50 }}">
+          <div class="card h-100 hover-shadow border-0">
+            {% set main = prod.images|selectattr('is_main')|first or prod.images[0] %}
+            {% if main %}
+              <div class="img-wrapper" style="--bg-img: url('{{ url_for('static', filename='uploads/' ~ main.filename) }}');">
+                <img src="{{ url_for('static', filename='uploads/' ~ main.filename) }}"
+                     alt="{{ prod.name }}"
+                     loading="lazy">
+              </div>
+            {% else %}
+              <div class="img-wrapper">
+                <span class="text-muted">Sin imagen</span>
+              </div>
+            {% endif %}
             
-            <button class="carousel-control-prev" type="button" data-bs-target="#{{ cid }}" data-bs-slide="prev">
-              <span class="carousel-control-prev-icon"></span>
-            </button>
-            <button class="carousel-control-next" type="button" data-bs-target="#{{ cid }}" data-bs-slide="next">
-              <span class="carousel-control-next-icon"></span>
-            </button>
+            <div class="card-body d-flex flex-column justify-content-between text-center">
+              <div>
+                <h5 class="card-title text-capitalize">{{ prod.name }}</h5>
+                {% if prod.description %}
+                  <p class="text-truncate-two">{{ prod.description }}</p>
+                {% endif %}
+              </div>
+              <div class="mt-3">
+                <p class="fw-bold mb-3">Bs {{ '%.2f'|format(prod.price) }}</p>
+                <a href="{{ url_for('producto_detalle', id=prod.id) }}" class="btn btn-primary w-100 btn-sm">
+                  <i class="bi bi-info-circle me-1"></i> Ver detalle
+                </a>
+              </div>
+            </div>
           </div>
+        </div>
+      {% else %}
+        <div class="col-12">
+          <p class="text-muted text-center">No hay productos disponibles.</p>
         </div>
       {% endfor %}
     </div>
+  </section>
 
-    <section class="mt-5">
-      <h2 class="mb-4">Productos</h2>
-      <div class="row g-4">
-        {% for prod in productos %}
-          <div class="col-6 col-md-3">
-            <div class="card h-100 hover-shadow border-0">
-              {% set main = prod.images|selectattr('is_main')|first or prod.images[0] %}
-              <div class="img-wrapper" style="--bg-img: url('{{ url_for('static', filename='uploads/' ~ main.filename) }}');">
-                <img src="{{ url_for('static', filename='uploads/' ~ main.filename) }}"
-                     alt="{{ prod.name }}">
-              </div>
-              <div class="card-body d-flex flex-column justify-content-between text-center">
-                <div>
-                  <h5 class="card-title text-capitalize">{{ prod.name }}</h5>
-                  <p class="text-truncate-two">{{ prod.description }}</p>
-                </div>
-                <div class="mt-3">
-                  <p class="fw-bold mb-2">Bs {{ '%.2f'|format(prod.price) }}</p>
-                  <a href="{{ url_for('producto_detalle', id=prod.id) }}" class="btn btn-primary w-100">
-                    <i class="bi bi-info-circle"></i> Ver detalle
-                  </a>
-                </div>
-              </div>
-            </div>
-          </div>
-        {% endfor %}
-      </div>
-    </section>
-
-    <section id="contacto" class="mt-5 text-center py-5 bg-white rounded-4 shadow-sm">
-      <h2>Contacto</h2>
-      <p class="mb-4">¿Tienes dudas o quieres un pedido personalizado?</p>
-      <a href="https://wa.me/{{ contact_info.whatsapp|replace(' ', '') }}" class="btn btn-success btn-lg">
-        <i class="bi bi-whatsapp"></i> Envíanos un mensaje
+  <!-- Sección de Contacto -->
+  <section class="contact-section mt-5" data-aos="fade-up">
+    <h2><i class="bi bi-whatsapp me-2"></i>¿Tienes dudas?</h2>
+    <p>¿Necesitas un pedido personalizado o tienes alguna consulta?<br>¡Contáctanos directamente por WhatsApp!</p>
+    {% set wsp = contact_info.whatsapp if contact_info and contact_info.whatsapp else None %}
+    {% if wsp %}
+      <a href="https://wa.me/{{ wsp | replace('+','') | replace(' ','') }}" 
+         class="btn btn-success btn-lg"
+         target="_blank"
+         rel="noopener noreferrer">
+        <i class="bi bi-whatsapp me-2"></i> Envíanos un mensaje
       </a>
-    </section>
-  </div>
+    {% else %}
+      <p class="text-muted">Información de contacto no disponible.</p>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

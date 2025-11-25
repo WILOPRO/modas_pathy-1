@@ -156,3 +156,152 @@ html, body { height:100%; font-family:'Montserrat',sans-serif; background:var(--
 .bg-primary-subtle { background-color: rgba(13,110,253,.12) !important; }
 .bg-warning-subtle { background-color: rgba(255,193,7,.15) !important; }
 .bg-success-subtle { background-color: rgba(25,135,84,.12) !important; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════ */
+/*       MEJORAS ESPECÍFICAS VISTA PÚBLICA                                  */
+/* ═══════════════════════════════════════════════════════════════════════ */
+
+/* Hero section en index */
+.hero-section {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: white;
+  padding: 4rem 2rem;
+  border-radius: 1.5rem;
+  margin-bottom: 3rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.hero-section::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  right: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+  animation: rotate 20s linear infinite;
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.hero-section .lead {
+  font-size: 1.4rem;
+  font-weight: 600;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1;
+}
+
+/* Carousels mejorados */
+.carousel {
+  border-radius: 1.5rem;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+
+.carousel-inner {
+  border-radius: 1.5rem;
+}
+
+.carousel-control-prev,
+.carousel-control-next {
+  width: 50px;
+  height: 50px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.3s ease;
+}
+
+.carousel:hover .carousel-control-prev,
+.carousel:hover .carousel-control-next {
+  opacity: 1;
+}
+
+.carousel-control-prev {
+  left: 15px;
+}
+
+.carousel-control-next {
+  right: 15px;
+}
+
+.carousel-caption {
+  background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.7));
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 2rem 1rem 1rem;
+  border-radius: 0 0 1.5rem 1.5rem;
+}
+
+/* Grid de productos responsivo */
+@media (max-width: 575px) {
+  .col-6 {
+    flex: 0 0 auto;
+    width: 50%;
+  }
+  
+  .card-body {
+    padding: 1rem 0.75rem;
+  }
+  
+  .card-title {
+    font-size: 0.95rem;
+  }
+  
+  .text-truncate-two {
+    font-size: 0.85rem;
+  }
+}
+
+/* Botones de contacto destacados */
+.contact-section {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+  border: 2px solid var(--gris-medio);
+}
+
+.contact-section h2 {
+  color: var(--primary);
+  margin-bottom: 1rem;
+}
+
+.contact-section p {
+  color: var(--text-color);
+  opacity: 0.9;
+}
+
+/* Mejora en precio de productos */
+.card .fw-bold {
+  font-size: 1.3rem;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+}
+
+/* Loading skeleton para imágenes */
+.img-wrapper.loading {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 50%,
+    #f0f0f0 75%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
