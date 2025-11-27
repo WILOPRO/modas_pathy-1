@@ -2,100 +2,332 @@
 
 {% block title %}{{ 'Nuevo Producto' if nuevo else 'Editar Producto' }} — Modas Pathy{% endblock %}
 
-{% block body_admin %}
-<div class="container">
-  <div class="card border-0 shadow-lg animate__animated animate__fadeInUp">
-    <!-- Cabecera con gradiente -->
-    <div class="card-header text-white text-center" style="background: linear-gradient(135deg, #8F2D56 0%, #E36485 100%);">
-      <h2 class="mb-0">{{ 'Nuevo Producto' if nuevo else 'Editar Producto' }}</h2>
-    </div>
-    <div class="card-body">
-      <form method="post" enctype="multipart/form-data" class="row g-4">
-        {{ form.hidden_tag() }}
-
-        <!-- Nombre -->
-        <div class="col-12">
-          {{ form.name.label(class="form-label fw-semibold") }}
-          {{ form.name(class="form-control form-control-lg", placeholder="Ingrese el nombre") }}
-          {% for e in form.name.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
+{% block content %}
+<div class="container-fluid">
+    <div class="admin-form">
+        <div class="admin-form-header">
+            <h2>
+                <i class="bi bi-{% if nuevo %}plus-circle{% else %}pencil{% endif %} me-2"></i>
+                {{ 'Nuevo Producto' if nuevo else 'Editar Producto' }}
+            </h2>
         </div>
-
-        <!-- Descripción -->
-        <div class="col-12">
-          {{ form.description.label(class="form-label fw-semibold") }}
-          {{ form.description(class="form-control", rows="3", placeholder="Descripción breve") }}
-          {% for e in form.description.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-        </div>
-
-        <!-- Precio y Categoría -->
-        <div class="col-md-6">
-          {{ form.price.label(class="form-label fw-semibold") }}
-          {{ form.price(class="form-control", placeholder="Precio (Bs)") }}
-          {% for e in form.price.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-        </div>
-        <div class="col-md-6">
-          {{ form.category.label(class="form-label fw-semibold") }}
-          {{ form.category(class="form-select") }}
-          {% for e in form.category.errors %}<div class="invalid-feedback d-block">{{ e }}</div>{% endfor %}
-        </div>
-
-        <!-- Imágenes -->
-        <div class="col-12">
-          <label class="form-label fw-semibold">Imágenes del producto</label>
-          <div id="preview-container" class="d-flex flex-wrap gap-3 align-items-center p-3 border rounded" style="background:#fff;">
-            {% if not nuevo and images %}
-              {% for img in images %}
-                <div class="image-thumbnail{% if img.is_main %} main{% endif %}" data-backend="true" data-id="{{ img.id }}">
-                  <img src="{{ url_for('static', filename='uploads/' + img.filename.replace('\\','/')) }}">
-                  <div class="main-indicator" onclick="selectExistingImage(this)">{% if img.is_main %}✔{% endif %}</div>
-                  <button type="button" class="remove-btn" onclick="removeExistingImage({{ img.id }}, this)">&times;</button>
+        
+        <div class="admin-form-body">
+            <form method="post" enctype="multipart/form-data" id="productForm">
+                {{ form.hidden_tag() }}
+                
+                <div class="row g-4">
+                    <!-- Left Column -->
+                    <div class="col-lg-8">
+                        <!-- Basic Info -->
+                        <div class="mb-4">
+                            <h5 class="fw-bold mb-3">Información Básica</h5>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Nombre del producto *</label>
+                                {{ form.name(class="form-control", placeholder="Ej: Pollera de fiesta color rosa") }}
+                                {% for error in form.name.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                            
+                            <div class="form-group">
+                                <label class="form-label">Descripción</label>
+                                {{ form.description(class="form-control", rows="4", placeholder="Describe el producto...") }}
+                            </div>
+                            
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Precio (Bs) *</label>
+                                    {{ form.price(class="form-control", placeholder="0.00") }}
+                                    {% for error in form.price.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Precio Original</label>
+                                    {{ form.original_price(class="form-control", placeholder="0.00") }}
+                                    <small class="text-muted">Para mostrar descuento</small>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Categoría *</label>
+                                    {{ form.category(class="form-control form-select") }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Images -->
+                        <div class="mb-4">
+                            <h5 class="fw-bold mb-3">Imágenes del Producto</h5>
+                            
+                            <div class="image-upload-zone" id="uploadZone">
+                                <i class="bi bi-cloud-arrow-up"></i>
+                                <p class="mb-1">Arrastra imágenes aquí o haz clic para seleccionar</p>
+                                <small class="text-muted">PNG, JPG, GIF o WEBP (máx. 16MB total)</small>
+                                <input type="file" 
+                                       id="imageInput" 
+                                       name="images" 
+                                       accept="image/*" 
+                                       multiple 
+                                       style="display: none;">
+                            </div>
+                            
+                            <div class="image-preview-grid" id="previewGrid">
+                                {% if not nuevo and images %}
+                                {% for img in images %}
+                                <div class="image-preview-item {% if img.is_main %}is-main{% endif %}" data-backend="true" data-id="{{ img.id }}">
+                                    <img src="{{ url_for('static', filename='uploads/' ~ img.filename) }}" alt="">
+                                    <div class="actions">
+                                        <button type="button" class="action-btn btn-main" onclick="selectExisting(this)" title="Principal">
+                                            <i class="bi bi-star{% if img.is_main %}-fill{% endif %}"></i>
+                                        </button>
+                                        <button type="button" class="action-btn btn-delete" onclick="removeExisting({{ img.id }}, this)" title="Eliminar">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    {% if img.is_main %}
+                                    <span class="main-badge">Principal</span>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                                {% endif %}
+                            </div>
+                            
+                            <input type="hidden" name="main_image_index" id="mainImageIndex" value="">
+                        </div>
+                    </div>
+                    
+                    <!-- Right Column -->
+                    <div class="col-lg-4">
+                        <!-- Status -->
+                        <div class="card mb-4">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3">Estado</h6>
+                                
+                                <div class="form-check form-switch mb-3">
+                                    {{ form.is_active(class="form-check-input", role="switch") }}
+                                    <label class="form-check-label" for="is_active">Producto activo</label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Tags -->
+                        <div class="card mb-4">
+                            <div class="card-body">
+                                <h6 class="fw-bold mb-3">Etiquetas</h6>
+                                
+                                <div class="form-check mb-2">
+                                    {{ form.is_new(class="form-check-input") }}
+                                    <label class="form-check-label" for="is_new">
+                                        <i class="bi bi-stars text-primary me-1"></i>Novedad
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check mb-2">
+                                    {{ form.is_trending(class="form-check-input") }}
+                                    <label class="form-check-label" for="is_trending">
+                                        <i class="bi bi-fire text-warning me-1"></i>Tendencia
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check">
+                                    {{ form.is_featured(class="form-check-input") }}
+                                    <label class="form-check-label" for="is_featured">
+                                        <i class="bi bi-award text-success me-1"></i>Destacado
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Actions -->
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i class="bi bi-check-circle me-2"></i>Guardar Producto
+                            </button>
+                            <a href="{{ url_for('admin_productos') }}" class="btn btn-outline">
+                                <i class="bi bi-x-circle me-2"></i>Cancelar
+                            </a>
+                        </div>
+                    </div>
                 </div>
-              {% endfor %}
-            {% endif %}
-            <label class="image-thumbnail add-image">
-              <span>➕</span>
-              <input type="file" id="image-input" name="images" accept="image/*" multiple data-nuevo="{{ 'true' if nuevo else 'false' }}">
-            </label>
-          </div>
-          <input type="hidden" name="main_image_index" id="main_image_index" value="">
-          <div class="form-text">
-            Selecciona una imagen como principal. Tamaño total máximo 16&nbsp;MB.
-          </div>
+            </form>
         </div>
-
-        <!-- Flags: Novedad, Tendencia, Destacado -->
-        <div class="col-md-4">
-          <div class="form-check">
-            {{ form.is_new(class="form-check-input", id="is_new") }}
-            <label class="form-check-label" for="is_new">{{ form.is_new.label.text }}</label>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="form-check">
-            {{ form.is_trending(class="form-check-input", id="is_trending") }}
-            <label class="form-check-label" for="is_trending">{{ form.is_trending.label.text }}</label>
-          </div>
-        </div>
-        <div class="col-md-4">
-          <div class="form-check">
-            {{ form.is_featured(class="form-check-input", id="is_featured") }}
-            <label class="form-check-label" for="is_featured">{{ form.is_featured.label.text }}</label>
-          </div>
-        </div>
-
-        <!-- Botones -->
-        <div class="col-12 d-flex justify-content-between mt-3">
-          <a href="{{ url_for('admin_productos') }}" class="btn btn-outline-secondary btn-lg rounded-pill px-4">Cancelar</a>
-          <button type="submit" class="btn btn-lg rounded-pill px-5 text-white" style="background: linear-gradient(135deg, #8F2D56, #E36485); border:none;">
-            Guardar
-          </button>
-        </div>
-      </form>
     </div>
-  </div>
 </div>
+{% endblock %}
 
-<!-- CSS y JS externos -->
-<link rel="stylesheet" href="{{ url_for('static', filename='css/producto_form.css') }}">
-<script src="{{ url_for('static', filename='js/producto_form.js') }}" defer></script>
+{% block scripts %}
+<script>
+const uploadZone = document.getElementById('uploadZone');
+const imageInput = document.getElementById('imageInput');
+const previewGrid = document.getElementById('previewGrid');
+const mainIndexInput = document.getElementById('mainImageIndex');
+const isNew = {{ 'true' if nuevo else 'false' }};
+
+let filesList = [];
+let mainIndex = null;
+let existingMainId = null;
+
+// Initialize existing main
+document.addEventListener('DOMContentLoaded', () => {
+    const mainItem = previewGrid.querySelector('.is-main[data-backend="true"]');
+    if (mainItem) {
+        existingMainId = mainItem.dataset.id;
+        mainIndexInput.value = `b_${existingMainId}`;
+    }
+});
+
+// Upload zone events
+uploadZone.addEventListener('click', () => imageInput.click());
+uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+});
+uploadZone.addEventListener('dragleave', () => {
+    uploadZone.classList.remove('dragover');
+});
+uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+
+imageInput.addEventListener('change', (e) => handleFiles(e.target.files));
+
+function handleFiles(files) {
+    for (const file of files) {
+        if (file.type.startsWith('image/')) {
+            filesList.push(file);
+        }
+    }
+    
+    if (isNew && mainIndex === null && filesList.length > 0) {
+        mainIndex = 0;
+    }
+    
+    renderImages();
+    syncFileInput();
+}
+
+function renderImages() {
+    // Clear new images only
+    const newItems = previewGrid.querySelectorAll('[data-new="true"]');
+    newItems.forEach(item => item.remove());
+    
+    // Add new images
+    filesList.forEach((file, i) => {
+        const url = URL.createObjectURL(file);
+        const div = document.createElement('div');
+        div.className = 'image-preview-item' + (mainIndex === i ? ' is-main' : '');
+        div.dataset.new = 'true';
+        div.innerHTML = `
+            <img src="${url}">
+            <div class="actions">
+                <button type="button" class="action-btn btn-main" onclick="setMainNew(${i})" title="Principal">
+                    <i class="bi bi-star${mainIndex === i ? '-fill' : ''}"></i>
+                </button>
+                <button type="button" class="action-btn btn-delete" onclick="removeNew(${i})" title="Eliminar">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            ${mainIndex === i ? '<span class="main-badge">Principal</span>' : ''}
+        `;
+        previewGrid.appendChild(div);
+    });
+    
+    updateMainIndex();
+}
+
+function setMainNew(idx) {
+    // Clear all main
+    previewGrid.querySelectorAll('.image-preview-item').forEach(item => {
+        item.classList.remove('is-main');
+        item.querySelector('.main-badge')?.remove();
+        const star = item.querySelector('.btn-main i');
+        if (star) star.className = 'bi bi-star';
+    });
+    
+    mainIndex = idx;
+    existingMainId = null;
+    renderImages();
+}
+
+function selectExisting(btn) {
+    const item = btn.closest('.image-preview-item');
+    
+    // Clear all main
+    previewGrid.querySelectorAll('.image-preview-item').forEach(el => {
+        el.classList.remove('is-main');
+        el.querySelector('.main-badge')?.remove();
+        const star = el.querySelector('.btn-main i');
+        if (star) star.className = 'bi bi-star';
+    });
+    
+    // Set this as main
+    item.classList.add('is-main');
+    btn.querySelector('i').className = 'bi bi-star-fill';
+    item.insertAdjacentHTML('beforeend', '<span class="main-badge">Principal</span>');
+    
+    mainIndex = null;
+    existingMainId = item.dataset.id;
+    updateMainIndex();
+}
+
+function removeNew(idx) {
+    filesList.splice(idx, 1);
+    if (mainIndex === idx) mainIndex = filesList.length > 0 ? 0 : null;
+    else if (mainIndex > idx) mainIndex--;
+    renderImages();
+    syncFileInput();
+}
+
+function removeExisting(imgId, btn) {
+    if (!confirm('¿Eliminar esta imagen?')) return;
+    
+    const item = btn.closest('.image-preview-item');
+    item.remove();
+    
+    if (existingMainId === String(imgId)) {
+        existingMainId = null;
+        updateMainIndex();
+    }
+    
+    // Add hidden input to mark for deletion
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = 'delete_image_ids';
+    hidden.value = imgId;
+    document.getElementById('productForm').appendChild(hidden);
+}
+
+function syncFileInput() {
+    const dt = new DataTransfer();
+    filesList.forEach(f => dt.items.add(f));
+    imageInput.files = dt.files;
+}
+
+function updateMainIndex() {
+    if (mainIndex !== null) {
+        mainIndexInput.value = mainIndex;
+    } else if (existingMainId) {
+        mainIndexInput.value = `b_${existingMainId}`;
+    } else {
+        mainIndexInput.value = '';
+    }
+}
+
+// Form validation
+document.getElementById('productForm').addEventListener('submit', function(e) {
+    syncFileInput();
+    updateMainIndex();
+    
+    const hasExisting = previewGrid.querySelectorAll('[data-backend="true"]').length > 0;
+    const hasNew = filesList.length > 0;
+    
+    if (isNew && !hasNew && !hasExisting) {
+        alert('Por favor, sube al menos una imagen');
+        e.preventDefault();
+    }
+});
+</script>
 {% endblock %}

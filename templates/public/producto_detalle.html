@@ -1,136 +1,424 @@
-{% extends "public/base.html" %}
+{% extends 'public/base.html' %}
 
 {% block title %}{{ producto.name }} — Modas Pathy{% endblock %}
-{% block page_title %}{{ producto.name }}{% endblock %}
+
+{% block og_title %}{{ producto.name }} — Modas Pathy{% endblock %}
+
+{% block meta_description %}{{ producto.description[:160] if producto.description else 'Descubre ' ~ producto.name ~ ' en Modas Pathy. Elegancia de la cholita boliviana.' }}{% endblock %}
 
 {% block styles %}
-  {{ super() }}
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/producto_detalle.css') }}">
+<style>
+    .product-gallery {
+        position: sticky;
+        top: calc(var(--header-height) + 1rem);
+    }
+    
+    .main-image-wrapper {
+        aspect-ratio: 1;
+        border-radius: var(--radius-2xl);
+        overflow: hidden;
+        background: var(--gray-100);
+        cursor: zoom-in;
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .main-image-wrapper img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform var(--transition-slower);
+    }
+    
+    .main-image-wrapper:hover img {
+        transform: scale(1.05);
+    }
+    
+    .thumbnails {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        gap: 0.75rem;
+        margin-top: 1rem;
+    }
+    
+    .thumbnail {
+        aspect-ratio: 1;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        border: 3px solid transparent;
+        cursor: pointer;
+        opacity: 0.7;
+        transition: all var(--transition-base);
+    }
+    
+    .thumbnail:hover {
+        opacity: 1;
+        transform: scale(1.05);
+    }
+    
+    .thumbnail.active {
+        border-color: var(--primary);
+        opacity: 1;
+    }
+    
+    .thumbnail img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .product-info {
+        padding: 2rem;
+        background: var(--white);
+        border-radius: var(--radius-2xl);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .product-price-box {
+        background: linear-gradient(135deg, rgba(143, 45, 86, 0.08), rgba(143, 45, 86, 0.03));
+        padding: 1.25rem;
+        border-radius: var(--radius-xl);
+        margin: 1.5rem 0;
+    }
+    
+    .product-price {
+        font-size: 2rem;
+        font-weight: 800;
+        color: var(--primary);
+    }
+    
+    .product-original-price {
+        font-size: 1.1rem;
+        color: var(--gray-400);
+        text-decoration: line-through;
+    }
+    
+    .discount-badge {
+        display: inline-block;
+        padding: 0.35rem 0.75rem;
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: var(--white);
+        border-radius: var(--radius-full);
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-left: 0.75rem;
+    }
+    
+    .features-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--gray-200);
+    }
+    
+    .feature-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        background: var(--gray-50);
+        border-radius: var(--radius-lg);
+        font-size: 0.85rem;
+        color: var(--gray-600);
+    }
+    
+    .feature-item i {
+        color: var(--primary);
+    }
+    
+    .related-section {
+        margin-top: 4rem;
+    }
+    
+    @media (max-width: 991px) {
+        .product-gallery {
+            position: static;
+        }
+        
+        .product-info {
+            margin-top: 1.5rem;
+        }
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<div class="container py-2 product-detail-page">
-
-  <!-- migas -->
-  <nav aria-label="breadcrumb" class="mb-3" data-aos="fade-down">
-    <ol class="breadcrumb">
-      <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('catalogo') }}">Catálogo</a></li>
-      <li class="breadcrumb-item active" aria-current="page">{{ producto.name }}</li>
-    </ol>
-  </nav>
-
-  <div class="row g-4 align-items-start">
-    <!-- Galería -->
-    <div class="col-12 col-lg-6" data-aos="fade-right">
-      {% set mains = producto.images|selectattr('is_main')|list %}
-      {% set main_img = (mains[0] if mains else (producto.images[0] if producto.images else None)) %}
-
-      <div class="product-gallery card shadow-sm">
-        <div class="ratio ratio-1x1 gallery-main p-2">
-          {% if main_img %}
-            <img id="mainImage"
-                 src="{{ url_for('static', filename='uploads/' ~ main_img.filename) }}"
-                 alt="{{ producto.name }}"
-                 class="img-fluid rounded object-fit-cover cursor-zoom"
-                 data-zoom="{{ url_for('static', filename='uploads/' ~ main_img.filename) }}">
-          {% else %}
-            <div class="d-flex align-items-center justify-content-center bg-light rounded">
-              <span class="text-muted">Sin imágenes</span>
-            </div>
-          {% endif %}
-        </div>
-
-        {% if producto.images %}
-        <div class="thumbs">
-          {% for img in producto.images %}
-            <button class="thumb btn p-0 border-0" type="button"
-                    data-src="{{ url_for('static', filename='uploads/' ~ img.filename) }}"
-                    aria-label="Imagen {{ loop.index }}">
-              <img src="{{ url_for('static', filename='uploads/' ~ img.filename) }}"
-                   class="thumb-img {% if main_img and img.id == main_img.id %}active{% endif %}"
-                   alt="{{ producto.name }} - {{ loop.index }}">
-            </button>
-          {% endfor %}
-        </div>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Info -->
-    <div class="col-12 col-lg-6" data-aos="fade-left">
-      <div class="card product-info-card shadow-sm h-100">
-        <div class="card-body d-flex flex-column">
-
-          <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
-            <!-- OJO: acá ya uso h2 porque el h1 está arriba en page_title -->
-            <h2 class="h4 mb-0">{{ producto.name }}</h2>
-
-            <div class="d-flex gap-2 product-badges">
-              {% if producto.is_new %}
-                <span class="badge rounded-pill bg-primary-subtle text-primary">Novedad</span>
-              {% endif %}
-              {% if producto.is_trending %}
-                <span class="badge rounded-pill bg-warning-subtle text-warning">Tendencia</span>
-              {% endif %}
-              {% if producto.is_featured %}
-                <span class="badge rounded-pill bg-success-subtle text-success">Destacado</span>
-              {% endif %}
-            </div>
-          </div>
-
-          <div class="mt-3">
-            <span class="h5 text-danger fw-bold product-price">
-              Bs {{ '%.2f'|format(producto.price) }}
-            </span>
-
+<div class="container">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" data-aos="fade-down">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('catalogo') }}">Catálogo</a></li>
             {% if producto.category %}
-              <span class="product-category-pill">{{ producto.category.name }}</span>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('catalogo', categoria=producto.category.id) }}">{{ producto.category.name }}</a>
+            </li>
             {% endif %}
-          </div>
+            <li class="breadcrumb-item active">{{ producto.name }}</li>
+        </ol>
+    </nav>
 
-          {% if producto.description %}
-            <p class="mt-3 mb-0 lh-base product-description">{{ producto.description }}</p>
-          {% else %}
-            <p class="mt-3 mb-0 text-muted product-description">Sin descripción.</p>
-          {% endif %}
-
-          <div class="cta-row mt-4 d-flex flex-wrap gap-2">
-            {% set wsp = contact_info.whatsapp if contact_info and contact_info.whatsapp else None %}
-            {% if wsp %}
-              {% set wspMsg = 'Hola, me interesa el producto: ' ~ producto.name ~ ' (ID ' ~ producto.id ~ ')' %}
-              <a class="btn btn-success btn-lg px-4" target="_blank"
-                 href="https://wa.me/{{ wsp | replace('+','') | replace(' ','') }}?text={{ wspMsg | urlencode }}">
-                <i class="bi bi-whatsapp me-1"></i> Comprar por WhatsApp
-              </a>
-            {% endif %}
-
-            <a class="btn btn-outline-primary btn-lg px-4" href="{{ url_for('catalogo') }}">
-              <i class="bi bi-arrow-left me-1"></i> Volver al catálogo
-            </a>
-          </div>
-
-          <hr class="my-4">
-          <div class="feature-list">
-            <span class="feature-item"><i class="bi bi-shield-check me-1"></i> Compra segura</span>
-            <span class="feature-item"><i class="bi bi-truck me-1"></i> Envíos a todo el país</span>
-            <span class="feature-item"><i class="bi bi-arrow-repeat me-1"></i> Cambios y devoluciones</span>
-          </div>
-
+    <div class="row g-4">
+        <!-- Gallery -->
+        <div class="col-lg-6" data-aos="fade-right">
+            <div class="product-gallery">
+                <!-- Main Image -->
+                <div class="main-image-wrapper" id="mainImageWrapper">
+                    {% set main_img = producto.main_image %}
+                    {% if main_img %}
+                    <img id="mainImage" 
+                         src="{{ url_for('static', filename='uploads/' ~ main_img.filename) }}" 
+                         alt="{{ producto.name }}"
+                         data-zoom="{{ url_for('static', filename='uploads/' ~ main_img.filename) }}">
+                    {% else %}
+                    <div class="d-flex align-items-center justify-content-center h-100">
+                        <i class="bi bi-image text-muted" style="font-size: 4rem;"></i>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Badges -->
+                    <div class="badge-group" style="position: absolute; top: 1rem; left: 1rem;">
+                        {% if producto.is_new %}
+                        <span class="badge badge-new">Nuevo</span>
+                        {% endif %}
+                        {% if producto.is_trending %}
+                        <span class="badge badge-trending">Tendencia</span>
+                        {% endif %}
+                        {% if producto.is_featured %}
+                        <span class="badge badge-featured">Destacado</span>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <!-- Thumbnails -->
+                {% if producto.images.count() > 1 %}
+                <div class="thumbnails">
+                    {% for img in producto.images.order_by('order').all() %}
+                    <div class="thumbnail {% if img.is_main %}active{% endif %}" 
+                         data-src="{{ url_for('static', filename='uploads/' ~ img.filename) }}">
+                        <img src="{{ url_for('static', filename='uploads/' ~ img.filename) }}" 
+                             alt="{{ producto.name }} - {{ loop.index }}"
+                             loading="lazy">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
         </div>
-      </div>
+
+        <!-- Product Info -->
+        <div class="col-lg-6" data-aos="fade-left">
+            <div class="product-info">
+                <!-- Category -->
+                {% if producto.category %}
+                <a href="{{ url_for('catalogo', categoria=producto.category.id) }}" 
+                   class="badge bg-primary-subtle text-primary mb-3 text-decoration-none">
+                    {{ producto.category.name }}
+                </a>
+                {% endif %}
+                
+                <!-- Title -->
+                <h1 class="h2 mb-3">{{ producto.name }}</h1>
+                
+                <!-- Price -->
+                <div class="product-price-box">
+                    <span class="product-price">Bs {{ '%.2f'|format(producto.price) }}</span>
+                    {% if producto.has_discount %}
+                    <span class="product-original-price">Bs {{ '%.2f'|format(producto.original_price) }}</span>
+                    <span class="discount-badge">-{{ producto.discount_percent }}% OFF</span>
+                    {% endif %}
+                </div>
+                
+                <!-- Description -->
+                {% if producto.description %}
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2">Descripción</h6>
+                    <p class="text-muted mb-0">{{ producto.description }}</p>
+                </div>
+                {% endif %}
+                
+                <!-- CTA Buttons -->
+                <!-- CTA Buttons -->
+                <div class="d-flex flex-column gap-3">
+                    {% if contact_info and contact_info.whatsapp %}
+                        {# Texto base para WhatsApp #}
+                        {% set base_text = 'Hola, vengo de la página Modas Pathy. Me interesa este producto: ' 
+                        ~ producto.name 
+                        ~ ' (Bs ' ~ '%.2f'|format(producto.price) ~ ').' %}
+
+
+                        <a href="#"
+                            id="btn-whatsapp"
+                            class="btn btn-success btn-lg"
+                            data-number="{{ contact_info.whatsapp|replace('+','')|replace(' ','') }}"
+                            data-base-text="{{ base_text }}">
+                            <i class="bi bi-whatsapp me-2"></i>
+                            Comprar por WhatsApp
+                        </a>
+                        {% endif %}
+
+                    <a href="{{ url_for('catalogo') }}" class="btn btn-outline btn-lg">
+                    <i class="bi bi-arrow-left me-2"></i>
+                    Volver al catálogo
+                    </a>
+                </div>
+
+                
+                <!-- Features -->
+                <div class="features-list">
+                    <span class="feature-item">
+                        <i class="bi bi-shield-check"></i>Compra segura
+                    </span>
+                    <span class="feature-item">
+                        <i class="bi bi-truck"></i>Envíos a todo el país
+                    </span>
+                    <span class="feature-item">
+                        <i class="bi bi-arrow-repeat"></i>Cambios y devoluciones
+                    </span>
+                    <span class="feature-item">
+                        <i class="bi bi-chat-dots"></i>Atención personalizada
+                    </span>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
+
+    <!-- Related Products -->
+    {% if relacionados %}
+    <section class="related-section" data-aos="fade-up">
+        <h2 class="mb-4">
+            <span class="text-gradient">Productos Relacionados</span>
+        </h2>
+        
+        <div class="row g-3 g-md-4">
+            {% for prod in relacionados %}
+            <div class="col-6 col-md-3">
+                <div class="card card-hover h-100">
+                    <a href="{{ url_for('producto_detalle', id=prod.id, slug=slugify(prod.name)) }}">
+                        <div class="img-wrapper">
+                            {% if prod.main_image %}
+                            <img src="{{ url_for('static', filename='uploads/' ~ prod.main_image.filename) }}" 
+                                 alt="{{ prod.name }}"
+                                 loading="lazy">
+                            {% else %}
+                            <div class="d-flex align-items-center justify-content-center h-100">
+                                <i class="bi bi-image text-muted" style="font-size: 2rem;"></i>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </a>
+                    
+                    <div class="card-body text-center">
+                        <h5 class="card-title text-truncate">{{ prod.name }}</h5>
+                        <p class="price mb-2">Bs {{ '%.2f'|format(prod.price) }}</p>
+                        <a href="{{ url_for('producto_detalle', id=prod.id, slug=slugify(prod.name)) }}" 
+                           class="btn btn-primary btn-sm">
+                            Ver detalle
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
 </div>
 
 <!-- Lightbox -->
-<div id="lightbox" class="lightbox d-none" role="dialog" aria-modal="true" aria-label="Vista de imagen">
-  <button class="btn-close position-absolute top-0 end-0 m-3" aria-label="Cerrar"></button>
-  <img id="lightboxImg" alt="imagen ampliada">
+<div id="lightbox" class="lightbox">
+    <button class="btn-close" aria-label="Cerrar">
+        <i class="bi bi-x-lg"></i>
+    </button>
+    <img id="lightboxImage" src="" alt="Imagen ampliada">
 </div>
 {% endblock %}
 
 {% block scripts %}
-  {{ super() }}
-  <script src="{{ url_for('static', filename='js/product.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const mainImage = document.getElementById('mainImage');
+    const mainWrapper = document.getElementById('mainImageWrapper');
+    const thumbnails = document.querySelectorAll('.thumbnail');
+    const lightbox = document.getElementById('lightbox');
+    const lightboxImage = document.getElementById('lightboxImage');
+    const closeBtn = lightbox.querySelector('.btn-close');
+    
+    // Thumbnail click
+    thumbnails.forEach(thumb => {
+        thumb.addEventListener('click', function() {
+            const src = this.dataset.src;
+            
+            // Update main image
+            mainImage.src = src;
+            mainImage.dataset.zoom = src;
+            
+            // Update active state
+            thumbnails.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+        });
+    });
+    
+    // Lightbox open
+    if (mainWrapper) {
+        mainWrapper.addEventListener('click', function() {
+            const src = mainImage.dataset.zoom || mainImage.src;
+            lightboxImage.src = src;
+            lightbox.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        });
+    }
+    
+    // Lightbox close
+    function closeLightbox() {
+        lightbox.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+    
+    closeBtn.addEventListener('click', closeLightbox);
+    
+    lightbox.addEventListener('click', function(e) {
+        if (e.target === lightbox) {
+            closeLightbox();
+        }
+    });
+    
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && lightbox.classList.contains('show')) {
+            closeLightbox();
+        }
+    });
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const btnWhats = document.getElementById('btn-whatsapp');
+    const mainImage = document.getElementById('mainImage');
+
+    if (!btnWhats || !mainImage) {
+        return;
+    }
+
+    btnWhats.addEventListener('click', function (e) {
+        e.preventDefault();
+
+        const number = this.dataset.number || '';
+        const baseText = this.dataset.baseText || '';
+
+        // Imagen que está grande (la seleccionada)
+        const imgSrc = mainImage.getAttribute('data-zoom') || mainImage.src;
+
+        // URL absoluta de esa imagen
+        const absoluteImageUrl = new URL(imgSrc, window.location.origin).href;
+
+        // 👇 SOLO UN ENLACE: el de la imagen seleccionada
+        const finalText = `${baseText}\nEnlace de la imagen seleccionada: ${absoluteImageUrl}`;
+
+        const waUrl = `https://wa.me/${number}?text=${encodeURIComponent(finalText)}`;
+        window.open(waUrl, '_blank');
+    });
+});
+</script>
+
+
 {% endblock %}

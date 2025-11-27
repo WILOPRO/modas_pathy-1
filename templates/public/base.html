@@ -1,141 +1,309 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% block title %}Tienda virtual Modas Pathy{% endblock %}</title>
-
-  <link rel="shortcut icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon"/>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous"/>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.css"/>
-
-  {% block styles %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
-  {% endblock %}
-
-  <style>
-    :root {
-      --primary:      {{ active_theme.primary }};
-      --secondary:    {{ active_theme.secondary }};
-      --accent:       {{ active_theme.accent }};
-      --text-color:   {{ active_theme.text_color }};
-      --bg-color:     {{ active_theme.bg_color }};  
-      --success:      {{ active_theme.success }};
-      --error:        {{ active_theme.error }};
-      --accent-light: rgba(
-        {{ active_theme.accent[1:3]|int(base=16) }},
-        {{ active_theme.accent[3:5]|int(base=16) }},
-        {{ active_theme.accent[5:7]|int(base=16) }},
-        0.08
-      );
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block meta_description %}Modas Pathy - Elegancia de la cholita boliviana. Vestimenta completa, telas finas, accesorios y todo para lucir auténtica.{% endblock %}">
+    <meta name="keywords" content="moda boliviana, cholita, vestimenta, telas, polleras, mantas, accesorios, Sucre">
+    <meta name="author" content="Modas Pathy">
+    <meta name="robots" content="index, follow">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="{% block og_title %}Modas Pathy{% endblock %}">
+    <meta property="og:description" content="Elegancia de la cholita boliviana">
+    <meta property="og:type" content="website">
+    <meta property="og:locale" content="es_BO">
+    
+    <title>{% block title %}Modas Pathy - Elegancia Boliviana{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    {% block styles %}{% endblock %}
+    
+    <!-- Theme Variables -->
+    <style>
+        :root {
+            --primary: {{ active_theme.primary if active_theme else '#8F2D56' }};
+            --secondary: {{ active_theme.secondary if active_theme else '#E36485' }};
+            --accent: {{ active_theme.accent if active_theme else '#25D366' }};
+            --text-color: {{ active_theme.text_color if active_theme else '#333333' }};
+            --bg-color: {{ active_theme.bg_color if active_theme else '#F8F9FA' }};
+            --success: {{ active_theme.success if active_theme else '#2A9D8F' }};
+            --error: {{ active_theme.error if active_theme else '#E63946' }};
+        }
+    </style>
 </head>
-
 <body>
-  <!-- HEADER FIJO -->
-  <header class="navbar navbar-light bg-white border-bottom fixed-top shadow-sm">
-    <div class="container-fluid">
-      <!-- Toggle Sidebar -->
-      <button id="sidebarToggle" class="btn btn-outline-secondary me-3" aria-label="Toggle sidebar">
-        <i class="bi bi-list"></i>
-      </button>
-
-      <!-- LOGO -->
-      <a href="{{ url_for('index') }}" class="navbar-brand d-flex align-items-center mb-0 h1" style="gap:10px;">
-        <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Logo" height="36" class="d-inline-block align-text-top">
-        <span class="d-none d-md-inline" style="font-size:1.3rem; font-weight:600; color:#8F2D56;">Modas Pathy</span>
-      </a>
-    </div>
-  </header>
-
-  <div class="d-flex">
-    <!-- SIDEBAR -->
-    <nav id="sidebarMenu" class="sidebar bg-white shadow-sm">
-      <div class="pt-5 px-3">
-        <!-- Buscador -->
-        <form action="{{ url_for('catalogo') }}" method="get" class="d-flex mb-4">
-          <input type="text" name="q" class="form-control form-control-sm me-2" placeholder="Buscar...">
-          <button class="btn btn-outline-secondary btn-sm" type="submit"><i class="bi bi-search"></i></button>
-        </form>
-      </div>
-
-      <ul class="nav flex-column px-3">
-        <li class="nav-item mb-1">
-          <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
-            <i class="bi bi-speedometer2 me-2"></i>Inicio
-          </a>
-        </li>
-        <li class="nav-item mb-1">
-          <a href="{{ url_for('catalogo') }}" class="nav-link {% if request.endpoint == 'catalogo' %}active{% endif %}">
-            <i class="bi bi-box-seam me-2"></i>Catálogo
-          </a>
-        </li>
-        <li class="nav-item mb-1">
-          <a href="{{ url_for('quienes_somos') }}" class="nav-link {% if request.endpoint == 'quienes_somos' %}active{% endif %}">
-            <i class="bi bi-info-circle me-2"></i>Quiénes Somos
-          </a>
-        </li>
-        <li class="nav-item mb-1">
-          <a href="{{ url_for('contacto') }}" class="nav-link {% if request.endpoint == 'contacto' %}active{% endif %}">
-            <i class="bi bi-telephone me-2"></i>Contacto
-          </a>
-        </li>
-
-        <!-- Categorías colapsable -->
-        <li class="nav-item mt-3">
-          <a class="nav-link d-flex justify-content-between align-items-center" data-bs-toggle="collapse" href="#collapseCategories" role="button" aria-expanded="false" aria-controls="collapseCategories">
-            <span><i class="bi bi-tags me-2"></i>Categorías</span>
-            <i class="bi bi-chevron-down small"></i>
-          </a>
-          <div class="collapse" id="collapseCategories">
-            <ul class="nav flex-column ps-3">
-              {% for cat in public_categories %}
-              <li class="nav-item">
-                <a href="{{ url_for('catalogo') }}?categoria={{ cat.id }}" class="nav-link small">
-                  {{ cat.name }}
+    <!-- Header -->
+    <header class="navbar">
+        <div class="container-fluid px-3 px-lg-4">
+            <div class="d-flex align-items-center">
+                <!-- Toggle Sidebar -->
+                <button id="sidebarToggle" class="btn-toggle me-3" aria-label="Menú">
+                    <i class="bi bi-list"></i>
+                </button>
+                
+                <!-- Logo -->
+                <a href="{{ url_for('index') }}" class="navbar-brand">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Modas Pathy" height="40">
+                    <span class="d-none d-md-inline">Modas Pathy</span>
                 </a>
-              </li>
-              {% endfor %}
-            </ul>
-          </div>
-        </li>
-      </ul>
+            </div>
+            
+            <!-- Actions -->
+            <div class="d-flex align-items-center gap-2">
+                {% if contact_info and contact_info.whatsapp %}
+                <a href="https://wa.me/{{ contact_info.whatsapp|replace('+','')|replace(' ','') }}" 
+                   class="btn btn-success btn-sm d-none d-sm-inline-flex" 
+                   target="_blank"
+                   rel="noopener">
+                    <i class="bi bi-whatsapp me-1"></i>
+                    <span class="d-none d-md-inline">WhatsApp</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- Sidebar -->
+    <nav id="sidebarMenu" class="sidebar">
+        <!-- Búsqueda -->
+        <div class="sidebar-search">
+            <form action="{{ url_for('catalogo') }}" method="get" class="input-group">
+                <input type="text" 
+                       name="q" 
+                       class="form-control" 
+                       placeholder="Buscar productos..."
+                       value="{{ request.args.get('q', '') }}">
+                <button type="submit" aria-label="Buscar">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
+        </div>
+        
+        <!-- Navegación -->
+        <ul class="nav flex-column">
+            <li class="nav-item">
+                <a href="{{ url_for('index') }}" 
+                   class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                    <i class="bi bi-house-heart"></i>
+                    <span>Inicio</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a href="{{ url_for('catalogo') }}" 
+                   class="nav-link {% if request.endpoint == 'catalogo' %}active{% endif %}">
+                    <i class="bi bi-grid-3x3-gap"></i>
+                    <span>Catálogo</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a href="{{ url_for('quienes_somos') }}" 
+                   class="nav-link {% if request.endpoint == 'quienes_somos' %}active{% endif %}">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Quiénes Somos</span>
+                </a>
+            </li>
+            
+            <li class="nav-item">
+                <a href="{{ url_for('contacto') }}" 
+                   class="nav-link {% if request.endpoint == 'contacto' %}active{% endif %}">
+                    <i class="bi bi-telephone-fill"></i>
+                    <span>Contacto</span>
+                </a>
+            </li>
+            
+            <!-- Categorías -->
+            {% if public_categories %}
+            <li class="nav-item mt-3">
+                <a class="nav-link collapse-header" 
+                   data-bs-toggle="collapse" 
+                   href="#categoriesCollapse" 
+                   role="button" 
+                   aria-expanded="false">
+                    <i class="bi bi-tags-fill"></i>
+                    <span>Categorías</span>
+                    <i class="bi bi-chevron-down chevron ms-auto"></i>
+                </a>
+                
+                <div class="collapse" id="categoriesCollapse">
+                    <ul class="nav flex-column">
+                        {% for cat in public_categories %}
+                        <li class="nav-item">
+                            <a href="{{ url_for('catalogo', categoria=cat.id) }}" 
+                               class="nav-link">
+                                <i class="bi {{ cat.icon or 'bi-tag' }}"></i>
+                                <span>{{ cat.name }}</span>
+                            </a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </li>
+            {% endif %}
+        </ul>
+        
+        <!-- Social Links -->
+        {% if contact_info %}
+        <div class="mt-auto p-3 border-top">
+            <p class="small text-muted mb-2">Síguenos</p>
+            <div class="d-flex gap-2">
+                {% if contact_info.facebook %}
+                <a href="{{ contact_info.facebook }}" target="_blank" class="btn btn-light btn-icon btn-sm" rel="noopener">
+                    <i class="bi bi-facebook"></i>
+                </a>
+                {% endif %}
+                {% if contact_info.instagram %}
+                <a href="{{ contact_info.instagram }}" target="_blank" class="btn btn-light btn-icon btn-sm" rel="noopener">
+                    <i class="bi bi-instagram"></i>
+                </a>
+                {% endif %}
+                {% if contact_info.tiktok %}
+                <a href="{{ contact_info.tiktok }}" target="_blank" class="btn btn-light btn-icon btn-sm" rel="noopener">
+                    <i class="bi bi-tiktok"></i>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </nav>
 
-    <!-- CONTENIDO PRINCIPAL -->
-    <main class="flex-grow-1" style="background: var(--bg-color) !important;">
-      <div class="container-fluid mt-5 pt-4">
-        <h1 class="mb-4">{% block page_title %}{% endblock %}</h1>
+    <!-- Main Content -->
+    <main>
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="toast-container">
+            {% for category, message in messages %}
+            <div class="toast toast-{{ category }}" role="alert">
+                <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}-fill"></i>
+                <span>{{ message }}</span>
+                <button type="button" class="btn-close" aria-label="Cerrar"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+        
         {% block content %}{% endblock %}
-      </div>
     </main>
-  </div>
 
-  {% block scripts %}
-    <!-- Bootstrap JS + Toggle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+    <!-- Footer -->
+    <footer class="py-4 mt-5 border-top bg-white">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Modas Pathy" height="40" class="mb-3">
+                    <p class="text-muted small">Elegancia de la cholita boliviana. Vestimenta completa, telas finas y accesorios exclusivos.</p>
+                </div>
+                
+                <div class="col-md-4">
+                    <h6 class="fw-bold mb-3">Enlaces</h6>
+                    <ul class="list-unstyled small">
+                        <li class="mb-2"><a href="{{ url_for('catalogo') }}" class="text-muted">Catálogo</a></li>
+                        <li class="mb-2"><a href="{{ url_for('quienes_somos') }}" class="text-muted">Quiénes Somos</a></li>
+                        <li class="mb-2"><a href="{{ url_for('contacto') }}" class="text-muted">Contacto</a></li>
+                    </ul>
+                </div>
+                
+                <div class="col-md-4">
+                    <h6 class="fw-bold mb-3">Contacto</h6>
+                    {% if contact_info %}
+                    <ul class="list-unstyled small text-muted">
+                        {% if contact_info.address %}
+                        <li class="mb-2"><i class="bi bi-geo-alt me-2"></i>{{ contact_info.address }}</li>
+                        {% endif %}
+                        {% if contact_info.whatsapp %}
+                        <li class="mb-2"><i class="bi bi-whatsapp me-2"></i>{{ contact_info.whatsapp }}</li>
+                        {% endif %}
+                        {% if contact_info.email %}
+                        <li class="mb-2"><i class="bi bi-envelope me-2"></i>{{ contact_info.email }}</li>
+                        {% endif %}
+                    </ul>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <hr class="my-4">
+            
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <p class="small text-muted mb-2 mb-md-0">© {{ current_year }} Modas Pathy. Todos los derechos reservados.</p>
+                <p class="small text-muted mb-0">Hecho con <i class="bi bi-heart-fill text-danger"></i> en Bolivia</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    
     <script>
-      document.getElementById('sidebarToggle').addEventListener('click', () => {
-        document.getElementById('sidebarMenu').classList.toggle('show');
-      });
+        // Initialize AOS
+        AOS.init({
+            duration: 600,
+            once: true,
+            offset: 50
+        });
+        
+        // Sidebar Toggle
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        const sidebar = document.getElementById('sidebarMenu');
+        
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('show');
+        });
+        
+        // Close sidebar on click outside
+        document.addEventListener('click', (e) => {
+            if (sidebar.classList.contains('show') && 
+                !sidebar.contains(e.target) && 
+                !sidebarToggle.contains(e.target)) {
+                sidebar.classList.remove('show');
+            }
+        });
+        
+        // Toast auto-close
+        document.querySelectorAll('.toast').forEach(toast => {
+            const closeBtn = toast.querySelector('.btn-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => toast.remove());
+            }
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        });
+        
+        // Header scroll effect
+        let lastScroll = 0;
+        window.addEventListener('scroll', () => {
+            const header = document.querySelector('.navbar');
+            const currentScroll = window.pageYOffset;
+            
+            if (currentScroll > 50) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+            
+            lastScroll = currentScroll;
+        });
     </script>
-
-    <!-- GSAP + ScrollTrigger -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
-
-    <!-- Tilt effect -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/vanilla-tilt/1.7.2/vanilla-tilt.min.js"></script>
-
-    <!-- AOS -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aos/2.3.4/aos.js"></script>
-
-    <!-- Tu JS principal -->
-    <script src="{{ url_for('static', filename='js/public.js') }}"></script>
-  {% endblock %}
+    
+    {% block scripts %}{% endblock %}
 </body>
 </html>

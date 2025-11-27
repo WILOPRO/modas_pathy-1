@@ -1,473 +1,244 @@
 {% extends 'public/base.html' %}
 
 {% block title %}
-  {% if categoria %}{{ categoria.name }}{% elif search %}Resultados: {{ search }}{% else %}Catálogo{% endif %} — Modas Pathy
-{% endblock %}
-
-{% block page_title %}
-  {% if categoria %}
-    <i class="bi bi-tag-fill me-2"></i>{{ categoria.name }}
-  {% elif search %}
-    <i class="bi bi-search me-2"></i>Resultados para "{{ search }}"
-  {% else %}
-    <i class="bi bi-grid-3x3-gap-fill me-2"></i>Catálogo
-  {% endif %}
+{% if categoria %}{{ categoria.name }}{% elif search %}Resultados: {{ search }}{% else %}Catálogo{% endif %} — Modas Pathy
 {% endblock %}
 
 {% block content %}
-<style>
-  /* Filters bar */
-  .filters-bar {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 1.25rem;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    margin-bottom: 2rem;
-    animation: fadeInDown 0.6s ease;
-  }
-
-  @keyframes fadeInDown {
-    from {
-      opacity: 0;
-      transform: translateY(-20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .filters-bar .form-select,
-  .filters-bar .form-control {
-    border-radius: 10px;
-    border: 2px solid var(--gris-medio);
-    padding: 0.65rem 1rem;
-    transition: all 0.3s ease;
-  }
-
-  .filters-bar .form-select:focus,
-  .filters-bar .form-control:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 4px rgba(var(--primary-rgb, 143, 45, 86), 0.1);
-  }
-
-  .filters-bar .btn {
-    padding: 0.65rem 1.5rem;
-  }
-
-  /* Results info */
-  .results-info {
-    background: linear-gradient(135deg, var(--gris-claro), white);
-    padding: 1rem 1.5rem;
-    border-radius: 12px;
-    margin-bottom: 1.5rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  }
-
-  .results-info .count {
-    font-weight: 700;
-    color: var(--primary);
-    font-size: 1.1rem;
-  }
-
-  .results-info .view-options {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .results-info .view-btn {
-    width: 40px;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid var(--gris-medio);
-    border-radius: 8px;
-    background: white;
-    cursor: pointer;
-    transition: all 0.3s ease;
-  }
-
-  .results-info .view-btn:hover,
-  .results-info .view-btn.active {
-    border-color: var(--primary);
-    background: var(--primary);
-    color: white;
-  }
-
-  /* Product grid */
-  .products-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 1.5rem;
-  }
-
-  @media (max-width: 767px) {
-    .products-grid {
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1rem;
-    }
-  }
-
-  @media (max-width: 575px) {
-    .products-grid {
-      gap: 0.75rem;
-    }
-  }
-
-  /* Empty state */
-  .empty-state {
-    text-align: center;
-    padding: 4rem 2rem;
-    animation: fadeInUp 0.6s ease;
-  }
-
-  @keyframes fadeInUp {
-    from {
-      opacity: 0;
-      transform: translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .empty-state i {
-    font-size: 4rem;
-    color: var(--gris-oscuro);
-    margin-bottom: 1rem;
-  }
-
-  .empty-state h3 {
-    color: var(--text-color);
-    margin-bottom: 1rem;
-  }
-
-  .empty-state p {
-    color: var(--text-color);
-    opacity: 0.7;
-  }
-
-  /* Pagination mejorada */
-  .pagination {
-    margin-top: 3rem;
-    justify-content: center;
-  }
-
-  .page-item .page-link {
-    border-radius: 10px;
-    margin: 0 0.25rem;
-    border: 2px solid var(--gris-medio);
-    color: var(--text-color);
-    font-weight: 600;
-    transition: all 0.3s ease;
-  }
-
-  .page-item .page-link:hover {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-    transform: translateY(-2px);
-  }
-
-  .page-item.active .page-link {
-    background: var(--primary);
-    border-color: var(--primary);
-  }
-
-  .page-item.disabled .page-link {
-    opacity: 0.5;
-  }
-
-  /* Badges de filtros activos */
-  .active-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-  }
-
-  .filter-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
-    color: white;
-    border-radius: 999px;
-    font-size: 0.875rem;
-    font-weight: 600;
-    animation: fadeIn 0.3s ease;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.9); }
-    to { opacity: 1; transform: scale(1); }
-  }
-
-  .filter-badge .remove {
-    cursor: pointer;
-    opacity: 0.8;
-    transition: opacity 0.2s ease;
-  }
-
-  .filter-badge .remove:hover {
-    opacity: 1;
-  }
-
-  /* Responsive filters */
-  @media (max-width: 991px) {
-    .filters-bar {
-      padding: 1.25rem;
-    }
-
-    .results-info {
-      flex-direction: column;
-      gap: 1rem;
-      text-align: center;
-    }
-  }
-
-  @media (max-width: 767px) {
-    .filters-bar .row > div {
-      margin-bottom: 1rem;
-    }
-
-    .filters-bar .row > div:last-child {
-      margin-bottom: 0;
-    }
-  }
-</style>
-
 <div class="container">
-  <!-- Barra de filtros -->
-  <div class="filters-bar" data-aos="fade-down">
-    <form method="get" action="{{ url_for('catalogo') }}" class="row g-3 align-items-end">
-      <!-- Búsqueda -->
-      <div class="col-md-4">
-        <label for="searchInput" class="form-label fw-semibold">
-          <i class="bi bi-search me-1"></i>Buscar producto
-        </label>
-        <input type="text" 
-               id="searchInput" 
-               name="q" 
-               class="form-control" 
-               placeholder="Nombre o descripción..."
-               value="{{ search if search else '' }}">
-      </div>
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" data-aos="fade-down">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Inicio</a></li>
+            <li class="breadcrumb-item {% if not categoria and not search %}active{% endif %}">
+                {% if categoria or search %}
+                <a href="{{ url_for('catalogo') }}">Catálogo</a>
+                {% else %}
+                Catálogo
+                {% endif %}
+            </li>
+            {% if categoria %}
+            <li class="breadcrumb-item active">{{ categoria.name }}</li>
+            {% elif search %}
+            <li class="breadcrumb-item active">"{{ search }}"</li>
+            {% endif %}
+        </ol>
+    </nav>
 
-      <!-- Categoría -->
-      <div class="col-md-3">
-        <label for="categorySelect" class="form-label fw-semibold">
-          <i class="bi bi-tag me-1"></i>Categoría
-        </label>
-        <select id="categorySelect" name="categoria" class="form-select">
-          <option value="">Todas</option>
-          {% for cat in categorias %}
-            <option value="{{ cat.id }}" {% if categoria and cat.id == categoria.id %}selected{% endif %}>
-              {{ cat.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <!-- Ordenar -->
-      <div class="col-md-3">
-        <label for="sortSelect" class="form-label fw-semibold">
-          <i class="bi bi-sort-down me-1"></i>Ordenar por
-        </label>
-        <select id="sortSelect" name="sort" class="form-select">
-          <option value="recientes" {% if sort == 'recientes' %}selected{% endif %}>Más recientes</option>
-          <option value="precio_asc" {% if sort == 'precio_asc' %}selected{% endif %}>Precio: menor a mayor</option>
-          <option value="precio_desc" {% if sort == 'precio_desc' %}selected{% endif %}>Precio: mayor a menor</option>
-          <option value="nombre_asc" {% if sort == 'nombre_asc' %}selected{% endif %}>Nombre: A-Z</option>
-          <option value="nombre_desc" {% if sort == 'nombre_desc' %}selected{% endif %}>Nombre: Z-A</option>
-        </select>
-      </div>
-
-      <!-- Botón filtrar -->
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100">
-          <i class="bi bi-funnel me-1"></i>Filtrar
-        </button>
-      </div>
-    </form>
-
-    <!-- Filtros activos -->
-    {% if categoria or search %}
-      <div class="active-filters mt-3">
-        {% if categoria %}
-          <span class="filter-badge">
-            <i class="bi bi-tag-fill"></i>
-            {{ categoria.name }}
-            <a href="{{ url_for('catalogo', q=search if search else '', sort=sort) }}" 
-               class="remove text-white">
-              <i class="bi bi-x-lg"></i>
-            </a>
-          </span>
-        {% endif %}
-        {% if search %}
-          <span class="filter-badge">
-            <i class="bi bi-search"></i>
-            "{{ search }}"
-            <a href="{{ url_for('catalogo', categoria=categoria.id if categoria else '', sort=sort) }}" 
-               class="remove text-white">
-              <i class="bi bi-x-lg"></i>
-            </a>
-          </span>
-        {% endif %}
-      </div>
-    {% endif %}
-  </div>
-
-  <!-- Info de resultados -->
-  {% if productos %}
-    <div class="results-info" data-aos="fade-up">
-      <div class="count">
-        <i class="bi bi-box-seam me-2"></i>
-        {{ productos|length }} producto{{ 's' if productos|length != 1 else '' }} encontrado{{ 's' if productos|length != 1 else '' }}
-      </div>
-    </div>
-  {% endif %}
-
-  <!-- Grid de productos -->
-  {% if productos %}
-    <div class="products-grid">
-      {% for prod in productos %}
-        <div class="animate-fade-in-up" data-aos="fade-up" data-aos-delay="{{ loop.index0 * 50 }}">
-          <div class="card h-100 hover-shadow border-0">
-            {% set main = prod.images|selectattr('is_main')|first or (prod.images[0] if prod.images else None) %}
-            {% if main %}
-              <div class="img-wrapper" style="--bg-img: url('{{ url_for('static', filename='uploads/' ~ main.filename) }}');">
-                <img src="{{ url_for('static', filename='uploads/' ~ main.filename) }}"
-                     alt="{{ prod.name }}"
-                     loading="lazy">
-              </div>
+    <!-- Page Header -->
+    <div class="page-header" data-aos="fade-up">
+        <h1 class="page-title">
+            {% if categoria %}
+            <i class="bi bi-tag-fill me-2"></i>{{ categoria.name }}
+            {% elif search %}
+            <i class="bi bi-search me-2"></i>Resultados para "{{ search }}"
             {% else %}
-              <div class="img-wrapper">
-                <div class="d-flex align-items-center justify-content-center h-100 text-muted">
-                  <i class="bi bi-image" style="font-size: 3rem;"></i>
-                </div>
-              </div>
+            <i class="bi bi-grid-3x3-gap-fill me-2"></i>Catálogo
             {% endif %}
-
-            <div class="card-body d-flex flex-column justify-content-between text-center">
-              <div>
-                <h5 class="card-title text-capitalize mb-2">{{ prod.name }}</h5>
-                {% if prod.description %}
-                  <p class="text-truncate-two small">{{ prod.description }}</p>
-                {% endif %}
-
-                <!-- Badges -->
-                {% if prod.is_new or prod.is_trending or prod.is_featured %}
-                  <div class="d-flex gap-1 justify-content-center mt-2 flex-wrap">
-                    {% if prod.is_new %}
-                      <span class="badge bg-primary-subtle text-primary">Nuevo</span>
-                    {% endif %}
-                    {% if prod.is_trending %}
-                      <span class="badge bg-warning-subtle text-warning">Tendencia</span>
-                    {% endif %}
-                    {% if prod.is_featured %}
-                      <span class="badge bg-success-subtle text-success">Destacado</span>
-                    {% endif %}
-                  </div>
-                {% endif %}
-              </div>
-
-              <div class="mt-3">
-                <p class="fw-bold mb-3 h5" style="color: var(--primary);">
-                  Bs {{ '%.2f'|format(prod.price) }}
-                </p>
-                <a href="{{ url_for('producto_detalle', id=prod.id) }}" 
-                   class="btn btn-primary w-100 btn-sm">
-                  <i class="bi bi-eye me-1"></i> Ver detalle
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      {% endfor %}
+        </h1>
     </div>
 
-    <!-- Paginación -->
-    {% if pagination.pages > 1 %}
-      <nav aria-label="Paginación" data-aos="fade-up">
-        <ul class="pagination">
-          <!-- Primera página -->
-          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" 
-               href="{{ url_for('catalogo', page=1, q=search, categoria=categoria.id if categoria else '', sort=sort) }}"
-               aria-label="Primera">
-              <i class="bi bi-chevron-double-left"></i>
-            </a>
-          </li>
-
-          <!-- Anterior -->
-          <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-            <a class="page-link" 
-               href="{{ url_for('catalogo', page=pagination.prev_num if pagination.has_prev else 1, q=search, categoria=categoria.id if categoria else '', sort=sort) }}"
-               aria-label="Anterior">
-              <i class="bi bi-chevron-left"></i>
-            </a>
-          </li>
-
-          <!-- Páginas -->
-          {% for p in range(1, pagination.pages + 1) %}
-            {% if p == pagination.page or (p >= pagination.page - 2 and p <= pagination.page + 2) or p == 1 or p == pagination.pages %}
-              <li class="page-item {% if p == pagination.page %}active{% endif %}">
-                <a class="page-link" 
-                   href="{{ url_for('catalogo', page=p, q=search, categoria=categoria.id if categoria else '', sort=sort) }}">
-                  {{ p }}
+    <!-- Filters -->
+    <div class="filters-bar" data-aos="fade-up">
+        <form method="get" action="{{ url_for('catalogo') }}">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">
+                        <i class="bi bi-search me-1"></i>Buscar
+                    </label>
+                    <input type="text" 
+                           name="q" 
+                           class="form-control" 
+                           placeholder="Nombre o descripción..."
+                           value="{{ search or '' }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">
+                        <i class="bi bi-tag me-1"></i>Categoría
+                    </label>
+                    <select name="categoria" class="form-control form-select">
+                        <option value="">Todas las categorías</option>
+                        {% for cat in categorias %}
+                        <option value="{{ cat.id }}" {% if categoria and cat.id == categoria.id %}selected{% endif %}>
+                            {{ cat.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label class="form-label">
+                        <i class="bi bi-sort-down me-1"></i>Ordenar por
+                    </label>
+                    <select name="sort" class="form-control form-select">
+                        <option value="recientes" {% if sort == 'recientes' %}selected{% endif %}>Más recientes</option>
+                        <option value="precio_asc" {% if sort == 'precio_asc' %}selected{% endif %}>Precio: menor a mayor</option>
+                        <option value="precio_desc" {% if sort == 'precio_desc' %}selected{% endif %}>Precio: mayor a menor</option>
+                        <option value="nombre_asc" {% if sort == 'nombre_asc' %}selected{% endif %}>Nombre: A-Z</option>
+                        <option value="nombre_desc" {% if sort == 'nombre_desc' %}selected{% endif %}>Nombre: Z-A</option>
+                        <option value="populares" {% if sort == 'populares' %}selected{% endif %}>Más populares</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="bi bi-funnel me-1"></i>Filtrar
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Active Filters -->
+            {% if categoria or search %}
+            <div class="d-flex flex-wrap gap-2 mt-3">
+                {% if categoria %}
+                <a href="{{ url_for('catalogo', q=search, sort=sort) }}" 
+                   class="badge bg-primary d-inline-flex align-items-center gap-1 text-decoration-none py-2 px-3">
+                    <i class="bi bi-tag-fill"></i>
+                    {{ categoria.name }}
+                    <i class="bi bi-x-lg ms-1"></i>
                 </a>
-              </li>
-            {% elif p == pagination.page - 3 or p == pagination.page + 3 %}
-              <li class="page-item disabled">
-                <span class="page-link">...</span>
-              </li>
+                {% endif %}
+                {% if search %}
+                <a href="{{ url_for('catalogo', categoria=categoria.id if categoria else '', sort=sort) }}" 
+                   class="badge bg-secondary d-inline-flex align-items-center gap-1 text-decoration-none py-2 px-3">
+                    <i class="bi bi-search"></i>
+                    "{{ search }}"
+                    <i class="bi bi-x-lg ms-1"></i>
+                </a>
+                {% endif %}
+            </div>
             {% endif %}
-          {% endfor %}
+        </form>
+    </div>
 
-          <!-- Siguiente -->
-          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" 
-               href="{{ url_for('catalogo', page=pagination.next_num if pagination.has_next else pagination.pages, q=search, categoria=categoria.id if categoria else '', sort=sort) }}"
-               aria-label="Siguiente">
-              <i class="bi bi-chevron-right"></i>
-            </a>
-          </li>
-
-          <!-- Última página -->
-          <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-            <a class="page-link" 
-               href="{{ url_for('catalogo', page=pagination.pages, q=search, categoria=categoria.id if categoria else '', sort=sort) }}"
-               aria-label="Última">
-              <i class="bi bi-chevron-double-right"></i>
-            </a>
-          </li>
-        </ul>
-      </nav>
+    <!-- Results Info -->
+    {% if productos %}
+    <div class="d-flex justify-content-between align-items-center mb-4" data-aos="fade-up">
+        <p class="mb-0 text-muted">
+            <strong class="text-primary">{{ pagination.total }}</strong> 
+            producto{{ 's' if pagination.total != 1 else '' }} encontrado{{ 's' if pagination.total != 1 else '' }}
+        </p>
+    </div>
     {% endif %}
 
-  {% else %}
-    <!-- Estado vacío -->
-    <div class="empty-state" data-aos="fade-up">
-      <i class="bi bi-inbox"></i>
-      <h3>No se encontraron productos</h3>
-      <p class="mb-4">
-        {% if search or categoria %}
-          Intenta ajustar tus filtros de búsqueda
-        {% else %}
-          Parece que aún no hay productos disponibles
-        {% endif %}
-      </p>
-      <a href="{{ url_for('catalogo') }}" class="btn btn-primary">
-        <i class="bi bi-arrow-clockwise me-2"></i>Ver todos los productos
-      </a>
+    <!-- Products Grid -->
+    {% if productos %}
+    <div class="row g-3 g-md-4">
+        {% for prod in productos %}
+        <div class="col-6 col-md-4 col-lg-3" data-aos="fade-up" data-aos-delay="{{ (loop.index0 % 4) * 50 }}">
+            <div class="card card-hover h-100">
+                <a href="{{ url_for('producto_detalle', id=prod.id, slug=slugify(prod.name)) }}">
+                    <div class="img-wrapper">
+                        {% if prod.main_image %}
+                        <img src="{{ url_for('static', filename='uploads/' ~ prod.main_image.filename) }}" 
+                             alt="{{ prod.name }}"
+                             loading="lazy">
+                        {% else %}
+                        <div class="d-flex align-items-center justify-content-center h-100">
+                            <i class="bi bi-image text-muted" style="font-size: 2.5rem;"></i>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Badges -->
+                        <div class="badge-group">
+                            {% if prod.is_new %}
+                            <span class="badge badge-new">Nuevo</span>
+                            {% endif %}
+                            {% if prod.is_trending %}
+                            <span class="badge badge-trending">Tendencia</span>
+                            {% endif %}
+                            {% if prod.is_featured %}
+                            <span class="badge badge-featured">Destacado</span>
+                            {% endif %}
+                            {% if prod.has_discount %}
+                            <span class="badge badge-discount">-{{ prod.discount_percent }}%</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </a>
+                
+                <div class="card-body text-center">
+                    <h5 class="card-title text-truncate">{{ prod.name }}</h5>
+                    
+                    {% if prod.category %}
+                    <p class="text-muted small mb-2">{{ prod.category.name }}</p>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <span class="price">Bs {{ '%.2f'|format(prod.price) }}</span>
+                        {% if prod.has_discount %}
+                        <span class="price-original">Bs {{ '%.2f'|format(prod.original_price) }}</span>
+                        {% endif %}
+                    </div>
+                    
+                    <a href="{{ url_for('producto_detalle', id=prod.id, slug=slugify(prod.name)) }}" 
+                       class="btn btn-primary btn-sm btn-block">
+                        <i class="bi bi-eye me-1"></i>Ver detalle
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
     </div>
-  {% endif %}
+
+    <!-- Pagination -->
+    {% if pagination.pages > 1 %}
+    <nav aria-label="Paginación" class="mt-5" data-aos="fade-up">
+        <ul class="pagination">
+            <!-- Previous -->
+            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                <a class="page-link" 
+                   href="{{ url_for('catalogo', page=pagination.prev_num, q=search, categoria=categoria.id if categoria else '', sort=sort) }}">
+                    <i class="bi bi-chevron-left"></i>
+                </a>
+            </li>
+            
+            <!-- Pages -->
+            {% for p in range(1, pagination.pages + 1) %}
+                {% if p == pagination.page or (p >= pagination.page - 2 and p <= pagination.page + 2) or p == 1 or p == pagination.pages %}
+                <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                    <a class="page-link" 
+                       href="{{ url_for('catalogo', page=p, q=search, categoria=categoria.id if categoria else '', sort=sort) }}">
+                        {{ p }}
+                    </a>
+                </li>
+                {% elif p == pagination.page - 3 or p == pagination.page + 3 %}
+                <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                </li>
+                {% endif %}
+            {% endfor %}
+            
+            <!-- Next -->
+            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                <a class="page-link" 
+                   href="{{ url_for('catalogo', page=pagination.next_num, q=search, categoria=categoria.id if categoria else '', sort=sort) }}">
+                    <i class="bi bi-chevron-right"></i>
+                </a>
+            </li>
+        </ul>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <!-- Empty State -->
+    <div class="empty-state" data-aos="fade-up">
+        <div class="empty-state-icon">
+            <i class="bi bi-inbox"></i>
+        </div>
+        <h3>No se encontraron productos</h3>
+        <p>
+            {% if search or categoria %}
+            Intenta ajustar tus filtros de búsqueda
+            {% else %}
+            Parece que aún no hay productos disponibles
+            {% endif %}
+        </p>
+        <a href="{{ url_for('catalogo') }}" class="btn btn-primary">
+            <i class="bi bi-arrow-clockwise me-1"></i>Ver todos los productos
+        </a>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

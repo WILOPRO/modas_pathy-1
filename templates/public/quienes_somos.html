@@ -1,40 +1,176 @@
 {% extends 'public/base.html' %}
 
-{% block title %}Quienes Somos — Modas Pathy{% endblock %}
-{% block page_title %}Quiénes Somos{% endblock %}
+{% block title %}Quiénes Somos — Modas Pathy{% endblock %}
 
 {% block content %}
+<div class="container">
+    <!-- Hero -->
+    <section class="hero mb-5" data-aos="fade-down">
+        <div class="hero-content">
+            <h1>Quiénes Somos</h1>
+            <p>Conoce la historia y pasión detrás de Modas Pathy</p>
+        </div>
+    </section>
 
-<div class="container py-4">
-  <div class="row align-items-center mb-5">
-    <div class="col-md-5" data-aos="fade-right">
-      <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Modas Pathy" class="img-fluid rounded-4 shadow-sm">
+    <!-- About Section -->
+    <div class="row align-items-center g-5 mb-5">
+        <div class="col-lg-5" data-aos="fade-right">
+            <div class="card p-4">
+                <img src="{{ url_for('static', filename='images/logo.png') }}" 
+                     alt="Modas Pathy" 
+                     class="img-fluid mx-auto d-block"
+                     style="max-height: 200px;">
+            </div>
+        </div>
+        
+        <div class="col-lg-7" data-aos="fade-left">
+            <h2 class="mb-4">
+                <span class="text-gradient">Nuestra Historia</span>
+            </h2>
+            <p class="lead text-muted mb-4">
+                En <strong>Modas Pathy</strong> celebramos la elegancia de la cholita boliviana con prendas de última tendencia.
+            </p>
+            <p class="text-muted">
+                Ofrecemos vestimenta completa para la cholita sucrense o cochala: telas finas, postizos, tacos, moños y accesorios. 
+                Nuestra misión es resaltar la cultura y tradición a través de diseños exclusivos, combinando calidad y estilo 
+                para que luzcas auténtica y moderna.
+            </p>
+            <p class="text-muted mb-0">
+                Cada prenda que ofrecemos es seleccionada con cuidado, garantizando la mejor calidad y los diseños más actuales 
+                para que puedas expresar tu identidad con orgullo.
+            </p>
+        </div>
     </div>
-    <div class="col-md-7" data-aos="fade-left">
-      <p class="lead fw-semibold">
-        En <strong>Modas Pathy</strong> celebramos la elegancia de la cholita boliviana con prendas de última tendencia. Ofrecemos vestimenta completa para la cholita sucrense o cochala: telas finas, postizos, tacos, moños y accesorios.
-      </p>
-      <p>
-        Nuestra misión es resaltar la cultura y tradición a través de diseños exclusivos, combinando calidad y estilo para que luzcas auténtica y moderna.
-      </p>
-    </div>
-  </div>
-  <div class="row text-center">
-    <div class="col-md-4 mb-4" data-aos="zoom-in">
-      <i class="bi bi-star-fill text-primary display-5 mb-3"></i>
-      <h5 class="fw-bold">Último Modelo</h5>
-      <p>Trajes y combinaciones que marcan tendencia en la moda cholita.</p>
-    </div>
-    <div class="col-md-4 mb-4" data-aos="zoom-in" data-aos-delay="100">
-      <i class="bi bi-person-bounding-box text-primary display-5 mb-3"></i>
-      <h5 class="fw-bold">Accesorios Completos</h5>
-      <p>Postizos, tacos, moños y todo lo necesario para complementar tu estilo.</p>
-    </div>
-    <div class="col-md-4 mb-4" data-aos="zoom-in" data-aos-delay="200">
-      <i class="bi bi-patch-check-fill text-primary display-5 mb-3"></i>
-      <h5 class="fw-bold">Telas de Calidad</h5>
-      <p>Variedad de telas de lujo para confeccionar prendas duraderas y elegantes.</p>
-    </div>
-  </div>
+
+    <!-- Values -->
+    <section class="mb-5">
+        <h2 class="text-center mb-5" data-aos="fade-up">
+            <span class="text-gradient">Nuestros Valores</span>
+        </h2>
+        
+        <div class="row g-4">
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="0">
+                <div class="card card-hover h-100 text-center p-4">
+                    <div class="mb-3">
+                        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle" 
+                             style="width: 80px; height: 80px;">
+                            <i class="bi bi-star-fill text-primary" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                    <h5 class="fw-bold mb-3">Calidad Premium</h5>
+                    <p class="text-muted mb-0">
+                        Seleccionamos las mejores telas y materiales para garantizar prendas duraderas y elegantes.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="100">
+                <div class="card card-hover h-100 text-center p-4">
+                    <div class="mb-3">
+                        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle" 
+                             style="width: 80px; height: 80px;">
+                            <i class="bi bi-heart-fill text-primary" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                    <h5 class="fw-bold mb-3">Tradición</h5>
+                    <p class="text-muted mb-0">
+                        Honramos la rica herencia cultural boliviana en cada diseño que creamos.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="col-md-4" data-aos="fade-up" data-aos-delay="200">
+                <div class="card card-hover h-100 text-center p-4">
+                    <div class="mb-3">
+                        <div class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary-subtle" 
+                             style="width: 80px; height: 80px;">
+                            <i class="bi bi-lightning-fill text-primary" style="font-size: 2rem;"></i>
+                        </div>
+                    </div>
+                    <h5 class="fw-bold mb-3">Innovación</h5>
+                    <p class="text-muted mb-0">
+                        Combinamos lo tradicional con las últimas tendencias de la moda contemporánea.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- What We Offer -->
+    <section class="mb-5">
+        <div class="row g-4">
+            <div class="col-lg-6" data-aos="fade-right">
+                <h2 class="mb-4">
+                    <span class="text-gradient">Lo Que Ofrecemos</span>
+                </h2>
+                
+                <div class="d-flex flex-column gap-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg bg-success-subtle" 
+                                 style="width: 48px; height: 48px;">
+                                <i class="bi bi-check-lg text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Telas de Lujo</h6>
+                            <p class="text-muted small mb-0">Variedad de telas finas para confeccionar prendas únicas y elegantes.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg bg-success-subtle" 
+                                 style="width: 48px; height: 48px;">
+                                <i class="bi bi-check-lg text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Accesorios Completos</h6>
+                            <p class="text-muted small mb-0">Postizos, tacos, moños y todo lo necesario para complementar tu estilo.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg bg-success-subtle" 
+                                 style="width: 48px; height: 48px;">
+                                <i class="bi bi-check-lg text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Últimas Tendencias</h6>
+                            <p class="text-muted small mb-0">Trajes y combinaciones que marcan tendencia en la moda cholita.</p>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg bg-success-subtle" 
+                                 style="width: 48px; height: 48px;">
+                                <i class="bi bi-check-lg text-success" style="font-size: 1.5rem;"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Asesoría Personalizada</h6>
+                            <p class="text-muted small mb-0">Te ayudamos a encontrar el look perfecto para cada ocasión.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6" data-aos="fade-left">
+                <div class="hero h-100 d-flex align-items-center">
+                    <div class="hero-content w-100">
+                        <h3>¿Lista para lucir espectacular?</h3>
+                        <p>Explora nuestro catálogo y encuentra las prendas perfectas para ti.</p>
+                        <a href="{{ url_for('catalogo') }}" class="btn btn-light btn-lg">
+                            <i class="bi bi-bag-heart me-2"></i>Ver Catálogo
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
 </div>
 {% endblock %}

@@ -1,62 +1,67 @@
-{% extends "admin/base_admin.html" %}
-{% block title %}Editar Perfil — Modas Pathy{% endblock %}
-{% block body_admin %}
-<div class="container py-5 d-flex justify-content-center align-items-center" style="min-height:80vh;">
-  <div class="card shadow rounded-4 border-0" style="max-width: 420px; width: 100%;">
-    <div class="card-body p-4">
-      <h4 class="mb-4 text-center">Editar Perfil</h4>
-      <!-- Imagen de perfil actual y preview -->
-      <div class="d-flex flex-column align-items-center mb-4">
-        <img id="avatarPreview"
-             src="{% if current_user.profile_image %}
-                    {{ url_for('static', filename='perfiles/' ~ current_user.profile_image) }}
-                  {% else %}
-                    {{ url_for('static', filename='perfiles/default.png') }}
-                  {% endif %}"
-             alt="Avatar"
-             class="rounded-circle shadow"
-             style="width: 120px; height: 120px; object-fit:cover; border: 3px solid #eee; background: #fff;">
-        <div class="small text-muted mt-2">Foto de perfil</div>
-      </div>
-      <form method="POST" enctype="multipart/form-data">
-        {{ form.hidden_tag() }}
+{% extends 'admin/base_admin.html' %}
 
-        <div class="mb-3">
-          {{ form.name.label(class="form-label") }}
-          {{ form.name(class="form-control", placeholder="Nombre completo") }}
+{% block title %}Editar Perfil — Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 500px;">
+    <div class="card">
+        <div class="card-body">
+            <h5 class="fw-bold mb-4">
+                <i class="bi bi-pencil me-2"></i>Editar Perfil
+            </h5>
+            
+            <div class="text-center mb-4">
+                <img id="avatarPreview"
+                     src="{% if current_user.profile_image %}{{ url_for('static', filename='perfiles/' ~ current_user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}" 
+                     class="rounded-circle mb-2"
+                     style="width: 100px; height: 100px; object-fit: cover; border: 3px solid var(--gray-200);">
+            </div>
+            
+            <form method="post" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+                
+                <div class="form-group">
+                    <label class="form-label">Nombre completo</label>
+                    {{ form.name(class="form-control") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Usuario</label>
+                    {{ form.username(class="form-control") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Nueva Contraseña</label>
+                    {{ form.password(class="form-control", placeholder="Dejar vacío para mantener") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Confirmar Contraseña</label>
+                    {{ form.password2(class="form-control") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Foto de perfil</label>
+                    {{ form.profile_image(class="form-control", onchange="previewImage(this)") }}
+                </div>
+                
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-2"></i>Guardar
+                    </button>
+                    <a href="{{ url_for('admin_profile') }}" class="btn btn-outline">Cancelar</a>
+                </div>
+            </form>
         </div>
-        <div class="mb-3">
-          {{ form.username.label(class="form-label") }}
-          {{ form.username(class="form-control", placeholder="Usuario") }}
-        </div>
-        <div class="mb-3">
-          {{ form.password.label(class="form-label") }}
-          {{ form.password(class="form-control", placeholder="Nueva contraseña") }}
-        </div>
-        <div class="mb-3">
-          {{ form.password2.label(class="form-label") }}
-          {{ form.password2(class="form-control", placeholder="Repite la contraseña") }}
-        </div>
-        <div class="mb-3">
-          {{ form.profile_image.label(class="form-label") }}
-          {{ form.profile_image(class="form-control", onchange="previewAvatar(event)") }}
-        </div>
-        {{ form.submit(class="btn btn-primary w-100 rounded-pill") }}
-        <a href="{{ url_for('admin_profile') }}" class="btn btn-outline-secondary w-100 rounded-pill mt-2">Cancelar</a>
-      </form>
     </div>
-  </div>
 </div>
 
-<!-- Script para previsualizar la imagen en tiempo real -->
 <script>
-function previewAvatar(event) {
-    const input = event.target;
-    const preview = document.getElementById('avatarPreview');
+function previewImage(input) {
     if (input.files && input.files[0]) {
         const reader = new FileReader();
         reader.onload = function(e) {
-            preview.src = e.target.result;
+            document.getElementById('avatarPreview').src = e.target.result;
         }
         reader.readAsDataURL(input.files[0]);
     }

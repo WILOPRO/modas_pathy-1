@@ -1,57 +1,112 @@
 {% extends 'admin/base_admin.html' %}
+
 {% block title %}Categorías — Modas Pathy{% endblock %}
-{% block body_admin %}
-<div class="row g-4 align-items-stretch">
-  <div class="col-lg-5 mb-4">
-    <div class="card shadow rounded-4 border-0 hover-shadow">
-      <div class="card-body p-4">
-        <h4 class="card-title mb-3">Nueva Categoría</h4>
-        <form method="post" action="{{ url_for('admin_categorias') }}">
-          {{ form.hidden_tag() }}
-          <div class="mb-3">
-            {{ form.name.label(class="form-label") }}
-            {{ form.name(class="form-control", placeholder="Nombre de categoría") }}
-          </div>
-          {{ form.submit(class="btn btn-primary w-100 rounded-pill") }}
-        </form>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-7 mb-4">
-    <div class="card shadow rounded-4 border-0 hover-shadow">
-      <div class="card-body p-4">
-        <h4 class="card-title mb-3">Listado de Categorías</h4>
-        <div class="table-responsive">
-          <table class="table table-hover align-middle">
-            <thead class="table-light">
-              <tr>
-                <th>#</th>
-                <th>Nombre</th>
-                <th class="text-end">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for cat in categorias %}
-              <tr>
-                <td>{{ cat.id }}</td>
-                <td>{{ cat.name }}</td>
-                <td class="text-end">
-                  <a href="{{ url_for('admin_categoria_editar', id=cat.id) }}" class="btn btn-sm btn-outline-secondary rounded-pill me-1">
-                    <i class="bi bi-pencil"></i> Editar
-                  </a>
-                  <form method="post" action="{{ url_for('admin_categoria_eliminar', id=cat.id) }}" class="d-inline">
-                    <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill" onclick="return confirm('¿Eliminar esta categoría?')">
-                      <i class="bi bi-trash"></i> Eliminar
-                    </button>
-                  </form>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="page-title mb-4">Categorías</h1>
+
+    <div class="row g-4">
+        <!-- Form -->
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Nueva Categoría</h5>
+                    <form method="post">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="form-group">
+                            <label class="form-label">Nombre *</label>
+                            {{ form.name(class="form-control", placeholder="Nombre de la categoría") }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Descripción</label>
+                            {{ form.description(class="form-control", rows="2", placeholder="Descripción opcional") }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Icono (Bootstrap Icons)</label>
+                            {{ form.icon(class="form-control", placeholder="bi-tag") }}
+                            <small class="text-muted">Ej: bi-bag, bi-gift, bi-star</small>
+                        </div>
+                        
+                        <div class="form-check mb-3">
+                            {{ form.is_active(class="form-check-input") }}
+                            <label class="form-check-label" for="is_active">Categoría activa</label>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary btn-block">
+                            <i class="bi bi-plus-circle me-2"></i>Crear Categoría
+                        </button>
+                    </form>
+                </div>
+            </div>
         </div>
-      </div>
+
+        <!-- List -->
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body p-0">
+                    {% if categorias %}
+                    <div class="table-responsive">
+                        <table class="table mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Productos</th>
+                                    <th>Estado</th>
+                                    <th class="text-end">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cat in categorias %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <i class="bi {{ cat.icon or 'bi-tag' }} text-primary"></i>
+                                            <strong>{{ cat.name }}</strong>
+                                        </div>
+                                    </td>
+                                    <td>{{ cat.products.count() }}</td>
+                                    <td>
+                                        {% if cat.is_active %}
+                                        <span class="status-badge status-badge-active">Activa</span>
+                                        {% else %}
+                                        <span class="status-badge status-badge-inactive">Inactiva</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="action-group justify-content-end">
+                                            <a href="{{ url_for('admin_categoria_editar', id=cat.id) }}" 
+                                               class="btn-action btn-action-edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            <form action="{{ url_for('admin_categoria_eliminar', id=cat.id) }}" 
+                                                  method="post" 
+                                                  class="d-inline"
+                                                  onsubmit="return confirm('¿Eliminar esta categoría?');">
+                                                <button type="submit" class="btn-action btn-action-delete">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="empty-state">
+                        <div class="empty-state-icon"><i class="bi bi-tags"></i></div>
+                        <h3>Sin categorías</h3>
+                        <p>Crea tu primera categoría</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 {% endblock %}

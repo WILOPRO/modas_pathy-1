@@ -2,92 +2,206 @@
 
 {% block title %}Dashboard — Modas Pathy{% endblock %}
 
-{% block body_admin %}
-  <div class="container-fluid">
-    <div class="text-center mb-5">
-      <h2 class="fw-bold mb-1" style="color: var(--primary);">
-        Bienvenido{{ current_user.name and ', ' ~ current_user.name or ', ' ~ current_user.username }}
-      </h2>
-      <p class="text-muted" style="font-size:1.2rem;">
-        ¡Gestiona tu tienda con facilidad!
-      </p>
+{% block content %}
+<div class="container-fluid">
+    <!-- Welcome Header -->
+    <div class="mb-4">
+        <h1 class="page-title">
+            Bienvenido, {{ current_user.name or current_user.username }}
+        </h1>
+        <p class="text-muted">Aquí tienes un resumen de tu tienda</p>
     </div>
 
-    {# — Selector rápido de tema (opcional) — #}
-    <div class="mb-4 d-flex justify-content-end">
-      <form id="theme-form" action="{{ url_for('admin_set_theme') }}" method="POST" class="d-flex align-items-center">
-        <label for="theme-selector" class="me-2 mb-0">Tema:</label>
-        <select id="theme-selector" name="theme_id" class="form-select form-select-sm w-auto">
-          {% for tema in all_themes %}
-            <option value="{{ tema.id }}" {% if tema.is_default %}selected{% endif %}>
-              {{ tema.name }}
-            </option>
-          {% endfor %}
-        </select>
-      </form>
+    <!-- Stats Cards -->
+    <div class="row g-4 mb-5">
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-card-primary">
+                <div class="stat-icon">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <div class="stat-value">{{ stats.productos }}</div>
+                <div class="stat-label">Productos Totales</div>
+            </div>
+        </div>
+        
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-card-success">
+                <div class="stat-icon">
+                    <i class="bi bi-check-circle"></i>
+                </div>
+                <div class="stat-value">{{ stats.productos_activos }}</div>
+                <div class="stat-label">Productos Activos</div>
+            </div>
+        </div>
+        
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-card-warning">
+                <div class="stat-icon">
+                    <i class="bi bi-tags"></i>
+                </div>
+                <div class="stat-value">{{ stats.categorias }}</div>
+                <div class="stat-label">Categorías</div>
+            </div>
+        </div>
+        
+        <div class="col-sm-6 col-lg-3">
+            <div class="stat-card stat-card-info">
+                <div class="stat-icon">
+                    <i class="bi bi-people"></i>
+                </div>
+                <div class="stat-value">{{ stats.usuarios }}</div>
+                <div class="stat-label">Administradores</div>
+            </div>
+        </div>
     </div>
 
-    <div class="row g-4 mb-5 justify-content-center">
-      <div class="col-sm-6 col-lg-4">
-        <div class="card text-center h-100 hover-shadow border-0 shadow-lg rounded-4 animate__animated animate__fadeInUp">
-          <div class="card-body d-flex flex-column justify-content-center">
-            <i class="bi bi-box-seam display-4 text-primary mb-2"></i>
-            <h5 class="card-title mt-2 mb-1">Productos</h5>
-            <div class="display-6 fw-bold mb-2">{{ total_productos }}</div>
-            <a href="{{ url_for('admin_productos') }}" class="btn btn-outline-primary rounded-pill mt-auto">
-              Gestionar Productos
-            </a>
-          </div>
+    <!-- Quick Stats Row -->
+    <div class="row g-4 mb-5">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                         style="width: 60px; height: 60px; background: rgba(59, 130, 246, 0.1);">
+                        <i class="bi bi-stars text-primary" style="font-size: 1.5rem;"></i>
+                    </div>
+                    <h3 class="mb-1">{{ stats.novedades }}</h3>
+                    <p class="text-muted mb-0">Productos en Novedades</p>
+                </div>
+            </div>
         </div>
-      </div>
-
-      <div class="col-sm-6 col-lg-4">
-        <div class="card text-center h-100 hover-shadow border-0 shadow-lg rounded-4 animate__animated animate__fadeInUp">
-          <div class="card-body d-flex flex-column justify-content-center">
-            <i class="bi bi-tags display-4 text-success mb-2"></i>
-            <h5 class="card-title mt-2 mb-1">Categorías</h5>
-            <div class="display-6 fw-bold mb-2">{{ total_categorias }}</div>
-            <a href="{{ url_for('admin_categorias') }}" class="btn btn-outline-success rounded-pill mt-auto">
-              Gestionar Categorías
-            </a>
-          </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                         style="width: 60px; height: 60px; background: rgba(245, 158, 11, 0.1);">
+                        <i class="bi bi-fire text-warning" style="font-size: 1.5rem;"></i>
+                    </div>
+                    <h3 class="mb-1">{{ stats.tendencias }}</h3>
+                    <p class="text-muted mb-0">Productos en Tendencias</p>
+                </div>
+            </div>
         </div>
-      </div>
-
-      {% if current_user.is_superadmin %}
-      <div class="col-sm-6 col-lg-4">
-        <div class="card text-center h-100 hover-shadow border-0 shadow-lg rounded-4 animate__animated animate__fadeInUp">
-          <div class="card-body d-flex flex-column justify-content-center">
-            <i class="bi bi-people display-4 text-warning mb-2"></i>
-            <h5 class="card-title mt-2 mb-1">Administradores</h5>
-            <div class="display-6 fw-bold mb-2">{{ total_usuarios }}</div>
-            <a href="{{ url_for('admin_usuarios') }}" class="btn btn-outline-warning rounded-pill mt-auto">
-              Gestionar Administradores
-            </a>
-          </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                         style="width: 60px; height: 60px; background: rgba(16, 185, 129, 0.1);">
+                        <i class="bi bi-award text-success" style="font-size: 1.5rem;"></i>
+                    </div>
+                    <h3 class="mb-1">{{ stats.destacados }}</h3>
+                    <p class="text-muted mb-0">Productos Destacados</p>
+                </div>
+            </div>
         </div>
-      </div>
-
-      <div class="col-sm-6 col-lg-4">
-        <div class="card text-center h-100 hover-shadow border-0 shadow-lg rounded-4 animate__animated animate__fadeInUp">
-          <div class="card-body d-flex flex-column justify-content-center">
-            <i class="bi bi-palette display-4 text-info mb-2"></i>
-            <h5 class="card-title mt-2 mb-1">Temas</h5>
-            <div class="display-6 fw-bold mb-2">{{ all_themes|length }}</div>
-            <a href="{{ url_for('admin_themes') }}" class="btn btn-outline-info rounded-pill mt-auto">
-              Gestionar Temas
-            </a>
-          </div>
-        </div>
-      </div>
-      {% endif %}
     </div>
-  </div>
 
-  <script>
-    // Auto-submit del selector de tema
-    document.getElementById('theme-selector')?.addEventListener('change', () => {
-      document.getElementById('theme-form').submit();
-    });
-  </script>
+    <div class="row g-4">
+        <!-- Top Products -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-4">
+                        <i class="bi bi-graph-up text-primary me-2"></i>
+                        Productos Más Vistos
+                    </h5>
+                    
+                    {% if top_productos %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for prod in top_productos %}
+                        <div class="d-flex align-items-center gap-3 p-2 rounded-3" style="background: var(--gray-50);">
+                            <div class="product-thumb">
+                                {% if prod.main_image %}
+                                <img src="{{ url_for('static', filename='uploads/' ~ prod.main_image.filename) }}" 
+                                     alt="{{ prod.name }}">
+                                {% else %}
+                                <div class="d-flex align-items-center justify-content-center h-100">
+                                    <i class="bi bi-image text-muted"></i>
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-0">{{ prod.name }}</h6>
+                                <small class="text-muted">{{ prod.views }} vistas</small>
+                            </div>
+                            <span class="badge bg-primary">Bs {{ '%.2f'|format(prod.price) }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                        <p class="mb-0 mt-2">No hay datos disponibles</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-4">
+                        <i class="bi bi-clock-history text-primary me-2"></i>
+                        Actividad Reciente
+                    </h5>
+                    
+                    {% if notificaciones %}
+                    <div class="d-flex flex-column gap-3">
+                        {% for notif in notificaciones %}
+                        <div class="d-flex align-items-start gap-3">
+                            <div class="notification-icon notification-icon-{{ notif.type }}">
+                                <i class="bi bi-{% if notif.type == 'success' %}check{% elif notif.type == 'warning' %}exclamation{% else %}info{% endif %}-circle"></i>
+                            </div>
+                            <div>
+                                <p class="mb-1">{{ notif.message }}</p>
+                                <small class="text-muted">
+                                    {{ notif.admin_name }} · {{ notif.timestamp.strftime('%d/%m/%Y %H:%M') }}
+                                </small>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">
+                        <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                        <p class="mb-0 mt-2">Sin actividad reciente</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row g-4 mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-4">
+                        <i class="bi bi-lightning text-primary me-2"></i>
+                        Acciones Rápidas
+                    </h5>
+                    
+                    <div class="d-flex flex-wrap gap-3">
+                        <a href="{{ url_for('admin_producto_nuevo') }}" class="btn btn-primary">
+                            <i class="bi bi-plus-circle me-2"></i>Nuevo Producto
+                        </a>
+                        <a href="{{ url_for('admin_categorias') }}" class="btn btn-outline">
+                            <i class="bi bi-tags me-2"></i>Gestionar Categorías
+                        </a>
+                        <a href="{{ url_for('admin_contactos') }}" class="btn btn-outline">
+                            <i class="bi bi-telephone me-2"></i>Editar Contacto
+                        </a>
+                        <a href="{{ url_for('index') }}" class="btn btn-success" target="_blank">
+                            <i class="bi bi-box-arrow-up-right me-2"></i>Ver Tienda
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

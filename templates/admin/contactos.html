@@ -1,43 +1,105 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}Contactos — Modas Pathy{% endblock %}
-{% block body_admin %}
-<div class="container-fluid">
-  <h2 class="mb-4">Datos de contacto</h2>
-  <form method="POST">
-    {{ form.hidden_tag() }}
-    <div class="row g-3">
-      <div class="col-md-6">
-        <label for="{{ form.whatsapp.id }}" class="form-label">WhatsApp</label>
-        {{ form.whatsapp(class="form-control", id=form.whatsapp.id) }}
-      </div>
-      <div class="col-md-6">
-        <label for="{{ form.tiktok.id }}" class="form-label">TikTok</label>
-        {{ form.tiktok(class="form-control", id=form.tiktok.id) }}
-      </div>
-      <div class="col-md-6">
-        <label for="{{ form.facebook.id }}" class="form-label">Facebook</label>
-        {{ form.facebook(class="form-control", id=form.facebook.id) }}
-      </div>
-      <div class="col-md-6">
-        <label for="{{ form.gmail.id }}" class="form-label">Gmail</label>
-        {{ form.gmail(class="form-control", id=form.gmail.id) }}
-      </div>
-      <div class="col-md-6">
-        <label for="{{ form.youtube.id }}" class="form-label">YouTube</label>
-        {{ form.youtube(class="form-control", id=form.youtube.id) }}
-      </div>
-      <div class="col-md-6">
-        <label for="{{ form.telegram.id }}" class="form-label">Telegram</label>
-        {{ form.telegram(class="form-control", id=form.telegram.id) }}
-      </div>
-      <div class="col-md-12">
-        <label for="{{ form.address.id }}" class="form-label">Dirección</label>
-        {{ form.address(class="form-control", id=form.address.id) }}
-      </div>
+
+{% block title %}Información de Contacto — Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 800px;">
+    <h1 class="page-title mb-4">Información de Contacto</h1>
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {{ form.hidden_tag() }}
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-whatsapp text-success me-1"></i>WhatsApp
+                        </label>
+                        {{ form.whatsapp(class="form-control", placeholder="+591 70000000") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-telephone me-1"></i>Teléfono
+                        </label>
+                        {{ form.phone(class="form-control", placeholder="4 6000000") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-envelope me-1"></i>Email
+                        </label>
+                        {{ form.email(class="form-control", placeholder="contacto@modaspathy.com") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-clock me-1"></i>Horario
+                        </label>
+                        {{ form.schedule(class="form-control", placeholder="Lun - Sáb: 9:00 - 19:00") }}
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <label class="form-label">
+                            <i class="bi bi-geo-alt me-1"></i>Dirección
+                        </label>
+                        {{ form.address(class="form-control", placeholder="Calle, número, zona") }}
+                    </div>
+                    
+                    <div class="col-md-4">
+                        <label class="form-label">Ciudad</label>
+                        {{ form.city(class="form-control", placeholder="Sucre, Bolivia") }}
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+                <h6 class="fw-bold mb-3">Redes Sociales</h6>
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-facebook text-primary me-1"></i>Facebook
+                        </label>
+                        {{ form.facebook(class="form-control", placeholder="https://facebook.com/modaspathy") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-instagram text-danger me-1"></i>Instagram
+                        </label>
+                        {{ form.instagram(class="form-control", placeholder="https://instagram.com/modaspathy") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-tiktok me-1"></i>TikTok
+                        </label>
+                        {{ form.tiktok(class="form-control", placeholder="https://tiktok.com/@modaspathy") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-youtube text-danger me-1"></i>YouTube
+                        </label>
+                        {{ form.youtube(class="form-control", placeholder="https://youtube.com/@modaspathy") }}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">
+                            <i class="bi bi-telegram text-info me-1"></i>Telegram
+                        </label>
+                        {{ form.telegram(class="form-control", placeholder="https://t.me/modaspathy") }}
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-2"></i>Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
-    <div class="mt-4">
-      <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
-    </div>
-  </form>
 </div>
 {% endblock %}

@@ -1,54 +1,189 @@
-{# templates/public/contacto.html #}
 {% extends 'public/base.html' %}
 
 {% block title %}Contacto — Modas Pathy{% endblock %}
 
-{% block page_title %}Contacto{% endblock %}
-
 {% block content %}
-  <div class="row">
-    <div class="col-md-6">
-      <h5>Escríbenos</h5>
-      <p>Si tienes alguna duda o quieres un pedido personalizado, mándanos un mensaje por WhatsApp o llena este formulario:</p>
-      <form action="https://wa.me/{{ contact_info.whatsapp|replace(' ', '') }}" method="get" target="_blank">
-        <div class="mb-3">
-          <label for="name" class="form-label">Nombre</label>
-          <input type="text" class="form-control" id="name" placeholder="Tu nombre">
+<div class="container">
+    <!-- Hero -->
+    <section class="hero mb-5" data-aos="fade-down">
+        <div class="hero-content">
+            <h1>Contáctanos</h1>
+            <p>Estamos aquí para ayudarte. ¡No dudes en escribirnos!</p>
         </div>
-        <div class="mb-3">
-          <label for="msg" class="form-label">Mensaje</label>
-          <textarea class="form-control" id="msg" rows="3" placeholder="¿En qué podemos ayudarte?"></textarea>
+    </section>
+
+    <div class="row g-4">
+        <!-- Contact Form -->
+        <div class="col-lg-6" data-aos="fade-right">
+            <div class="card p-4 h-100">
+                <h3 class="mb-4">
+                    <i class="bi bi-chat-dots-fill text-primary me-2"></i>
+                    Envíanos un mensaje
+                </h3>
+                
+                <p class="text-muted mb-4">
+                    ¿Tienes alguna pregunta o quieres un pedido personalizado? Completa el formulario y te contactaremos por WhatsApp.
+                </p>
+                
+                {% if contact_info and contact_info.whatsapp %}
+                <form id="contactForm">
+                    <div class="form-group">
+                        <label class="form-label">Tu nombre</label>
+                        <input type="text" class="form-control" id="contactName" placeholder="¿Cómo te llamas?" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Tu mensaje</label>
+                        <textarea class="form-control" id="contactMessage" rows="4" placeholder="Cuéntanos en qué podemos ayudarte..." required></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success btn-lg btn-block">
+                        <i class="bi bi-whatsapp me-2"></i>Enviar por WhatsApp
+                    </button>
+                </form>
+                
+                <script>
+                    document.getElementById('contactForm').addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const name = document.getElementById('contactName').value;
+                        const message = document.getElementById('contactMessage').value;
+                        const text = `Hola, soy ${name}. ${message}`;
+                        const phone = '{{ contact_info.whatsapp|replace("+","")|replace(" ","") }}';
+                        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(text)}`, '_blank');
+                    });
+                </script>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">Información de contacto no disponible</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
-        <button type="submit" class="btn btn-success">
-          <i class="bi bi-whatsapp"></i> Enviar por WhatsApp
-        </button>
-      </form>
+
+        <!-- Contact Info -->
+        <div class="col-lg-6" data-aos="fade-left">
+            <div class="card p-4 h-100">
+                <h3 class="mb-4">
+                    <i class="bi bi-info-circle-fill text-primary me-2"></i>
+                    Información de contacto
+                </h3>
+                
+                {% if contact_info %}
+                <div class="d-flex flex-column gap-4">
+                    {% if contact_info.address %}
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg" 
+                                 style="width: 48px; height: 48px; background: linear-gradient(135deg, var(--primary), var(--secondary));">
+                                <i class="bi bi-geo-alt-fill text-white"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Dirección</h6>
+                            <p class="text-muted mb-0">{{ contact_info.address }}</p>
+                            {% if contact_info.city %}
+                            <p class="text-muted small mb-0">{{ contact_info.city }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact_info.whatsapp %}
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg" 
+                                 style="width: 48px; height: 48px; background: linear-gradient(135deg, #25d366, #128c7e);">
+                                <i class="bi bi-whatsapp text-white"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">WhatsApp</h6>
+                            <a href="https://wa.me/{{ contact_info.whatsapp|replace('+','')|replace(' ','') }}" 
+                               class="text-success text-decoration-none"
+                               target="_blank">
+                                {{ contact_info.whatsapp }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact_info.email %}
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg" 
+                                 style="width: 48px; height: 48px; background: linear-gradient(135deg, #ea4335, #c5221f);">
+                                <i class="bi bi-envelope-fill text-white"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Email</h6>
+                            <a href="mailto:{{ contact_info.email }}" class="text-muted text-decoration-none">
+                                {{ contact_info.email }}
+                            </a>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if contact_info.schedule %}
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <div class="d-inline-flex align-items-center justify-content-center rounded-lg" 
+                                 style="width: 48px; height: 48px; background: linear-gradient(135deg, #f59e0b, #d97706);">
+                                <i class="bi bi-clock-fill text-white"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <h6 class="fw-bold mb-1">Horario</h6>
+                            <p class="text-muted mb-0">{{ contact_info.schedule }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Social Links -->
+                <hr class="my-4">
+                <h6 class="fw-bold mb-3">Síguenos en redes sociales</h6>
+                <div class="d-flex gap-2">
+                    {% if contact_info.facebook %}
+                    <a href="{{ contact_info.facebook }}" target="_blank" rel="noopener"
+                       class="btn btn-light btn-icon" style="background: #1877f2; color: white;">
+                        <i class="bi bi-facebook"></i>
+                    </a>
+                    {% endif %}
+                    {% if contact_info.instagram %}
+                    <a href="{{ contact_info.instagram }}" target="_blank" rel="noopener"
+                       class="btn btn-light btn-icon" style="background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: white;">
+                        <i class="bi bi-instagram"></i>
+                    </a>
+                    {% endif %}
+                    {% if contact_info.tiktok %}
+                    <a href="{{ contact_info.tiktok }}" target="_blank" rel="noopener"
+                       class="btn btn-light btn-icon" style="background: #000; color: white;">
+                        <i class="bi bi-tiktok"></i>
+                    </a>
+                    {% endif %}
+                    {% if contact_info.youtube %}
+                    <a href="{{ contact_info.youtube }}" target="_blank" rel="noopener"
+                       class="btn btn-light btn-icon" style="background: #ff0000; color: white;">
+                        <i class="bi bi-youtube"></i>
+                    </a>
+                    {% endif %}
+                    {% if contact_info.telegram %}
+                    <a href="{{ contact_info.telegram }}" target="_blank" rel="noopener"
+                       class="btn btn-light btn-icon" style="background: #0088cc; color: white;">
+                        <i class="bi bi-telegram"></i>
+                    </a>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="text-center py-4 text-muted">
+                    <i class="bi bi-exclamation-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">No hay información de contacto disponible</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
-    <div class="col-md-6">
-      <h5>Datos de contacto</h5>
-      <ul class="list-unstyled">
-        {% if contact_info.address %}
-        <li><i class="bi bi-geo-alt-fill me-2"></i>{{ contact_info.address }}</li>
-        {% endif %}
-        {% if contact_info.whatsapp %}
-        <li><i class="bi bi-whatsapp me-2"></i>{{ contact_info.whatsapp }}</li>
-        {% endif %}
-        {% if contact_info.gmail %}
-        <li><i class="bi bi-envelope-fill me-2"></i>{{ contact_info.gmail }}</li>
-        {% endif %}
-        {% if contact_info.facebook %}
-        <li><i class="bi bi-facebook me-2"></i>{{ contact_info.facebook }}</li>
-        {% endif %}
-        {% if contact_info.tiktok %}
-        <li><i class="bi bi-tiktok me-2"></i>{{ contact_info.tiktok }}</li>
-        {% endif %}
-        {% if contact_info.youtube %}
-        <li><i class="bi bi-youtube me-2"></i>{{ contact_info.youtube }}</li>
-        {% endif %}
-        {% if contact_info.telegram %}
-        <li><i class="bi bi-telegram me-2"></i>{{ contact_info.telegram }}</li>
-        {% endif %}
-      </ul>
-    </div>
-  </div>
+</div>
 {% endblock %}

@@ -1,44 +1,122 @@
 {% extends 'admin/base_admin.html' %}
 
-{% block title %}{{ title }} — Modas Pathy{% endblock %}
+{% block title %}{{ titulo }} — Modas Pathy{% endblock %}
 
-{% block body_admin %}
-<div class="container-fluid">
-  <h2 class="mb-4">{{ title }}</h2>
-  <form method="POST">
-    {{ form.hidden_tag() }}
-    <div class="row g-3">
-      <div class="col-md-6">
-        <label for="{{ form.name.id }}" class="form-label">Nombre de tema</label>
-        {{ form.name(class="form-control", id=form.name.id) }}
-        {% for err in form.name.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-      <div class="col-md-6">
-        <div class="form-check mt-4">
-          {{ form.is_default(class="form-check-input", id=form.is_default.id) }}
-          <label for="{{ form.is_default.id }}" class="form-check-label">
-            Tema por defecto
-          </label>
+{% block content %}
+<div class="container-fluid" style="max-width: 700px;">
+    <div class="card">
+        <div class="card-body">
+            <h5 class="fw-bold mb-4">
+                <i class="bi bi-palette me-2"></i>{{ titulo }}
+            </h5>
+            
+            <form method="post">
+                {{ form.hidden_tag() }}
+                
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label class="form-label">Nombre del tema *</label>
+                        {{ form.name(class="form-control") }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">&nbsp;</label>
+                        <div class="form-check mt-2">
+                            {{ form.is_default(class="form-check-input") }}
+                            <label class="form-check-label" for="is_default">Tema por defecto</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+                
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Color Primario</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.primary(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.primary.data }}" 
+                                   onchange="this.previousElementSibling.querySelector('input').value = this.value">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Color Secundario</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.secondary(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.secondary.data }}">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Color Acento</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.accent(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.accent.data }}">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Color de Texto</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.text_color(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.text_color.data }}">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Color de Fondo</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.bg_color(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.bg_color.data }}">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Color Éxito</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.success(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.success.data }}">
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">Color Error</label>
+                        <div class="color-picker-wrapper">
+                            <div class="color-picker-preview">
+                                {{ form.error(type="color") }}
+                            </div>
+                            <input type="text" class="form-control color-picker-input" 
+                                   value="{{ form.error.data }}">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-2"></i>Guardar
+                    </button>
+                    <a href="{{ url_for('admin_themes') }}" class="btn btn-outline">Cancelar</a>
+                </div>
+            </form>
         </div>
-      </div>
-
-      {% for field in [form.primary, form.secondary, form.accent, form.text_color, form.bg_color, form.success, form.error] %}
-      <div class="col-md-4">
-        <label for="{{ field.id }}" class="form-label">{{ field.label.text }}</label>
-        {{ field(class="form-control form-control-color", type="color", id=field.id) }}
-        {% for err in field.errors %}
-          <div class="text-danger small">{{ err }}</div>
-        {% endfor %}
-      </div>
-      {% endfor %}
     </div>
-
-    <div class="mt-4">
-      <button type="submit" class="btn btn-primary me-2">{{ form.submit.label.text }}</button>
-      <a href="{{ url_for('admin_themes') }}" class="btn btn-outline-secondary">Cancelar</a>
-    </div>
-  </form>
 </div>
 {% endblock %}

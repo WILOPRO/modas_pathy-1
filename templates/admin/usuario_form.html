@@ -1,42 +1,67 @@
 {% extends 'admin/base_admin.html' %}
-{% block title %}{% if nuevo %}Nuevo{% else %}Editar{% endif %} Administrador — Modas Pathy{% endblock %}
-{% block body_admin %}
-<div class="container py-5 d-flex justify-content-center align-items-center" style="min-height:80vh;">
-  <div class="card shadow rounded-4 border-0" style="max-width: 420px; width: 100%;">
-    <div class="card-body p-4">
-      <h4 class="mb-4 text-center">{% if nuevo %}Nuevo{% else %}Editar{% endif %} Administrador</h4>
-      {% if not nuevo %}
-      <div class="d-flex flex-column align-items-center mb-4">
-        <img src="{% if user.profile_image %}{{ url_for('static', filename='perfiles/' ~ user.profile_image) }}{% else %}{{ url_for('static', filename='perfiles/default.png') }}{% endif %}" class="rounded-circle shadow" style="width: 100px; height: 100px; object-fit:cover;">
-      </div>
-      {% endif %}
-      <form method="POST" enctype="multipart/form-data">
-        {{ form.hidden_tag() }}
 
-        <div class="mb-3">
-          {{ form.name.label(class="form-label") }}
-          {{ form.name(class="form-control", placeholder="Nombre completo") }}
+{% block title %}{{ 'Nuevo' if nuevo else 'Editar' }} Usuario — Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="max-width: 600px;">
+    <div class="card">
+        <div class="card-body">
+            <h5 class="fw-bold mb-4">
+                <i class="bi bi-person me-2"></i>
+                {{ 'Nuevo Administrador' if nuevo else 'Editar Administrador' }}
+            </h5>
+            
+            <form method="post" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+                
+                {% if not nuevo %}
+                <div class="text-center mb-4">
+                    <img src="{% if user.profile_image %}{{ url_for('static', filename='perfiles/' ~ user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}" 
+                         class="rounded-circle mb-2"
+                         style="width: 100px; height: 100px; object-fit: cover;">
+                </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label class="form-label">Nombre completo *</label>
+                    {{ form.name(class="form-control", placeholder="Nombre y apellido") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Usuario *</label>
+                    {{ form.username(class="form-control", placeholder="usuario") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Contraseña {% if nuevo %}*{% else %}(dejar vacío para mantener){% endif %}</label>
+                    {{ form.password(class="form-control", placeholder="••••••••") }}
+                </div>
+                
+                {% if not nuevo %}
+                <div class="form-group">
+                    <label class="form-label">Confirmar Contraseña</label>
+                    {{ form.password2(class="form-control", placeholder="••••••••") }}
+                </div>
+                {% endif %}
+                
+                <div class="form-group">
+                    <label class="form-label">Rol</label>
+                    {{ form.is_superadmin(class="form-control form-select") }}
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Foto de perfil</label>
+                    {{ form.profile_image(class="form-control") }}
+                </div>
+                
+                <div class="d-flex gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle me-2"></i>Guardar
+                    </button>
+                    <a href="{{ url_for('admin_usuarios') }}" class="btn btn-outline">Cancelar</a>
+                </div>
+            </form>
         </div>
-        <div class="mb-3">
-          {{ form.username.label(class="form-label") }}
-          {{ form.username(class="form-control", placeholder="Usuario") }}
-        </div>
-        <div class="mb-3">
-          {{ form.password.label(class="form-label") }}
-          {{ form.password(class="form-control", placeholder="Contraseña (dejar vacío para no cambiar)") }}
-        </div>
-        <div class="mb-3">
-          {{ form.is_superadmin.label(class="form-label") }}
-          {{ form.is_superadmin(class="form-select") }}
-        </div>
-        <div class="mb-3">
-          {{ form.profile_image.label(class="form-label") }}
-          {{ form.profile_image(class="form-control") }}
-        </div>
-        {{ form.submit(class="btn btn-primary w-100 rounded-pill") }}
-        <a href="{{ url_for('admin_usuarios') }}" class="btn btn-outline-secondary w-100 rounded-pill mt-2">Cancelar</a>
-      </form>
     </div>
-  </div>
 </div>
 {% endblock %}
