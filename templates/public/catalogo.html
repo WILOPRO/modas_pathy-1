@@ -151,8 +151,11 @@
                             {% if prod.is_featured %}
                             <span class="badge badge-featured">Destacado</span>
                             {% endif %}
+                            {% if prod.is_on_sale %}
+                            <span class="badge badge-promo">{{ prod.promo_label }}</span>
                             {% if prod.has_discount %}
                             <span class="badge badge-discount">-{{ prod.discount_percent }}%</span>
+                            {% endif %}
                             {% endif %}
                         </div>
                     </div>

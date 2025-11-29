@@ -8,9 +8,9 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 :root {
-    --admin-sidebar-bg: #1a1a2e;
-    --admin-sidebar-hover: rgba(255, 255, 255, 0.08);
-    --admin-sidebar-active: rgba(143, 45, 86, 0.3);
+    --admin-sidebar-bg: #0f172a;
+    --admin-sidebar-hover: rgba(255, 255, 255, 0.06);
+    --admin-sidebar-active: rgba(255, 255, 255, 0.12);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -23,7 +23,10 @@
 }
 
 .admin-sidebar .nav-link {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.8);
+    background: transparent;
+    border-radius: var(--radius-xl);
+    font-weight: 600;
 }
 
 .admin-sidebar .nav-link:hover {
@@ -34,6 +37,7 @@
 .admin-sidebar .nav-link.active {
     color: var(--white);
     background: var(--admin-sidebar-active);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .admin-sidebar .nav-link.active::before {
@@ -42,6 +46,15 @@
 
 .admin-sidebar::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.admin-sidebar .nav-link span,
+.admin-sidebar .nav-link i {
+    color: inherit;
+}
+
+.admin-sidebar .nav-link::before {
+    display: none;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -329,6 +342,12 @@
 .status-badge-featured {
     background: rgba(16, 185, 129, 0.1);
     color: #059669;
+}
+
+.status-badge-sale {
+    background: rgba(236, 72, 153, 0.12);
+    color: #be185d;
+    border: 1px dashed rgba(190, 24, 93, 0.4);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

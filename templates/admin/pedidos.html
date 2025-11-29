@@ -1,0 +1,98 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block title %}Pedidos — Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
+        <div>
+            <p class="text-muted mb-1 small">Gestión de pedidos</p>
+            <h2 class="mb-0">Pedidos</h2>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Producto</th>
+                            <th>Método</th>
+                            <th>Total</th>
+                            <th>Estado</th>
+                            <th>Creado</th>
+                            <th>Historial</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pedido in pedidos %}
+                        <tr>
+                            <td class="fw-semibold">{{ pedido.order_code }}</td>
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if pedido.image_url %}
+                                    <img src="{{ pedido.image_url }}" alt="img" width="48" height="48" style="object-fit: cover; border-radius: 12px;">
+                                    {% elif pedido.product and pedido.product.main_image %}
+                                    <img src="{{ url_for('static', filename='uploads/' ~ pedido.product.main_image.filename) }}" alt="img" width="48" height="48" style="object-fit: cover; border-radius: 12px;">
+                                    {% endif %}
+                                    <div>
+                                        <div class="fw-semibold">{{ pedido.product.name if pedido.product else 'Producto eliminado' }}</div>
+                                        <div class="text-muted small">ID {{ pedido.product_id }}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge bg-{% if pedido.payment_method=='paypal' %}primary{% else %}success{% endif %}">
+                                    {{ pedido.payment_method|capitalize }}
+                                </span>
+                            </td>
+                            <td>Bs {{ '%.2f'|format(pedido.total) }}</td>
+                            <td>
+                                <form action="{{ url_for('admin_pedido_estado', order_id=pedido.id) }}" method="post" class="d-flex gap-2 align-items-center">
+                                    <select name="status" class="form-select form-select-sm">
+                                        {% for st in statuses %}
+                                        <option value="{{ st }}" {% if pedido.status==st %}selected{% endif %}>{{ st }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-primary btn-sm">Guardar</button>
+                                </form>
+                            </td>
+                            <td class="text-muted small">{{ pedido.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td style="max-width: 220px;">
+                                {% if pedido.history %}
+                                    {% for h in pedido.history|reverse %}
+                                    <div class="bg-light p-2 rounded mb-1">
+                                        <div class="fw-semibold">{{ h.status }}</div>
+                                        <div class="text-muted small">{{ h.timestamp }}</div>
+                                        {% if h.note %}<div class="small">{{ h.note }}</div>{% endif %}
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <span class="text-muted small">Sin historial</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <form method="post" action="{{ url_for('admin_pedido_eliminar', order_id=pedido.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar el pedido {{ pedido.order_code }}?');">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">
+                                        <i class="bi bi-trash"></i> Eliminar
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox me-2"></i>No hay pedidos registrados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

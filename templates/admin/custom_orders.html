@@ -1,0 +1,280 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block title %}Pedidos Personalizados - Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
+        <div>
+            <p class="text-muted mb-1 small">Gestión de pedidos personalizados</p>
+            <h2 class="mb-1">Pedidos Personalizados</h2>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge text-bg-danger">{{ urgentes_count }} urgente(s)</span>
+                <span class="badge text-bg-light border">Estados detallados</span>
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" id="btnTabla">
+                <i class="bi bi-table"></i> Tabla
+            </button>
+            <button class="btn btn-outline-secondary" id="btnAgenda">
+                <i class="bi bi-calendar-event"></i> Agenda
+            </button>
+            <a href="{{ url_for('admin_custom_order_nuevo') }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle me-2"></i>Nuevo Pedido
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4" id="filtros">
+        <div class="card-body">
+            <form class="row g-3 align-items-end" method="get">
+                <div class="col-md-3">
+                    <label class="form-label">Cliente</label>
+                    <select name="cliente" class="form-select">
+                        <option value="">Todos</option>
+                        {% for c in clients %}
+                        <option value="{{ c.id }}" {% if filtro_cliente == c.id %}selected{% endif %}>
+                            {{ c.name }} ({{ c.phone }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo de prenda</label>
+                    <select name="tipo" class="form-select">
+                        <option value="">Todas</option>
+                        {% for t in tipos %}
+                        <option value="{{ t }}" {% if filtro_tipo == t %}selected{% endif %}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Estado</label>
+                    <select name="estado" class="form-select">
+                        <option value="">Todos</option>
+                        {% for st in estados %}
+                        <option value="{{ st }}" {% if filtro_estado == st %}selected{% endif %}>{{ estado_labels.get(st, st.title()) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check mt-4">
+                        <input class="form-check-input" type="checkbox" name="urgente" value="1" id="fUrgente" {% if filtro_urgente == '1' %}checked{% endif %}>
+                        <label class="form-check-label" for="fUrgente">Solo urgentes</label>
+                    </div>
+                </div>
+                <div class="col-md-1 text-end">
+                    <button class="btn btn-primary w-100" type="submit"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if soon_orders %}
+    <div class="alert alert-warning d-flex align-items-center gap-2">
+        <i class="bi bi-exclamation-triangle-fill"></i>
+        <div>
+            <div class="fw-semibold">Pedidos próximos a entrega</div>
+            <div class="small mb-0">{{ soon_orders|length }} pedido(s) vencen en 3 días o menos. Revisa la agenda.</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card shadow-sm border-0" id="tablaView">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Código</th>
+                            <th>Cliente</th>
+                            <th>Prenda(s)</th>
+                            <th>Entrega</th>
+                            <th>Urgente</th>
+                            <th>Estado</th>
+                            <th>Cambia estado</th>
+                            <th>Total</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pedidos %}
+                        {% set days = (p.delivery_date - now_date).days if p.delivery_date else None %}
+                        {% set row_class = '' %}
+                        {% if days is not none %}
+                            {% if days <= 1 %}
+                                {% set row_class = 'table-danger' %}
+                            {% elif days == 2 %}
+                                {% set row_class = 'table-warning' %}
+                            {% elif days == 3 %}
+                                {% set row_class = 'table-light' %}
+                            {% endif %}
+                        {% endif %}
+                        <tr class="{{ row_class }}">
+                            <td class="fw-semibold">{{ p.code }}</td>
+                            <td>
+                                <div class="fw-semibold">{{ p.client.name }}</div>
+                                <div class="text-muted small">{{ p.client.phone }}</div>
+                            </td>
+                            <td>
+                                {% set item_count = p.items.count() %}
+                                {% if item_count > 0 %}
+                                    {% set first_item = p.items.first() %}
+                                    {{ first_item.garment_type }}
+                                    {% if item_count > 1 %}
+                                        <span class="badge text-bg-light border ms-1">+{{ item_count - 1 }} prenda(s)</span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ p.garment_type }}
+                                {% endif %}
+                            </td>
+                            <td>{{ p.delivery_date.strftime('%d/%m/%Y') if p.delivery_date else '-' }}</td>
+                            <td>
+                                {% if p.is_urgent %}
+                                <span class="badge bg-danger">Urgente</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Normal</span>
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-primary-subtle text-primary">{{ estado_labels.get(p.status, p.status.title()) }}</span></td>
+                            <td>
+                                <form method="post" action="{{ url_for('admin_custom_order_estado', order_id=p.id) }}" class="d-flex gap-2 align-items-center">
+                                    <select name="status" class="form-select form-select-sm">
+                                        {% for st in estados %}
+                                        <option value="{{ st }}" {% if p.status == st %}selected{% endif %}>{{ estado_labels.get(st, st.title()) }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-sm btn-outline-success" type="submit"><i class="bi bi-check"></i></button>
+                                </form>
+                            </td>
+                            <td>Bs {{ '%.2f'|format(p.total) }}</td>
+                            <td class="text-end">
+                                <a href="{{ url_for('admin_custom_order_detalle', order_id=p.id) }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i> Ver
+                                </a>
+                                <form method="post" action="{{ url_for('admin_custom_order_eliminar', order_id=p.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar el pedido {{ p.code }}?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox me-2"></i>No hay pedidos personalizados registrados.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if pagination and pagination.pages > 1 %}
+            <div class="p-3 border-top">
+                <ul class="pagination mb-0 justify-content-center">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_custom_orders', page=pagination.prev_num, cliente=filtro_cliente, tipo=filtro_tipo, estado=filtro_estado, urgente=filtro_urgente) }}">&laquo;</a>
+                    </li>
+                    {% for p in range(1, pagination.pages + 1) %}
+                    {% if p == pagination.page or (p >= pagination.page - 2 and p <= pagination.page + 2) or p == 1 or p == pagination.pages %}
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_custom_orders', page=p, cliente=filtro_cliente, tipo=filtro_tipo, estado=filtro_estado, urgente=filtro_urgente) }}">{{ p }}</a>
+                    </li>
+                    {% elif p == pagination.page - 3 or p == pagination.page + 3 %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                    {% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_custom_orders', page=pagination.next_num, cliente=filtro_cliente, tipo=filtro_tipo, estado=filtro_estado, urgente=filtro_urgente) }}">&raquo;</a>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 d-none" id="agendaView">
+        <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between mb-3">
+                <div>
+                    <h5 class="mb-0">Agenda por fecha de entrega</h5>
+                    <small class="text-muted">Muestra los próximos pedidos con fecha asignada.</small>
+                </div>
+            </div>
+
+            {% if agenda_items %}
+            {% set current_date = None %}
+            {% for item in agenda_items %}
+                {% if current_date != item.delivery_date %}
+                    {% set current_date = item.delivery_date %}
+                    <div class="mt-3 mb-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-calendar-week text-primary"></i>
+                            <h6 class="mb-0">{{ item.delivery_date.strftime('%d/%m/%Y') }}</h6>
+                        </div>
+                    </div>
+                {% endif %}
+                <div class="border rounded p-3 mb-2 {% if item.is_urgent %}border-danger{% else %}border-light{% endif %}">
+                    <div class="d-flex flex-wrap justify-content-between gap-2">
+                        <div>
+                            <div class="fw-bold">{{ item.code }} - {{ item.garment_type }}</div>
+                            <div class="text-muted small">{{ item.client.name }} · {{ item.client.phone }}</div>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if item.is_urgent %}
+                            <span class="badge bg-danger">Urgente</span>
+                            {% endif %}
+                            <span class="badge bg-primary-subtle text-primary">{{ estado_labels.get(item.status, item.status.title()) }}</span>
+                            <span class="badge text-bg-light border">Bs {{ '%.2f'|format(item.total) }}</span>
+                            <a href="{{ url_for('admin_custom_order_detalle', order_id=item.id) }}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver
+                            </a>
+                        </div>
+                    </div>
+                    {% if item.observations %}
+                    <div class="small text-muted mt-2">
+                        <i class="bi bi-chat-left-text me-1"></i>{{ item.observations }}
+                    </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            {% else %}
+            <p class="text-muted mb-0">No hay pedidos con fecha de entrega asignada.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const tablaView = document.getElementById('tablaView');
+const agendaView = document.getElementById('agendaView');
+const btnTabla = document.getElementById('btnTabla');
+const btnAgenda = document.getElementById('btnAgenda');
+
+function toggleView(showAgenda) {
+    if (showAgenda) {
+        tablaView.classList.add('d-none');
+        agendaView.classList.remove('d-none');
+        btnAgenda.classList.add('btn-primary');
+        btnAgenda.classList.remove('btn-outline-secondary');
+        btnTabla.classList.add('btn-outline-secondary');
+        btnTabla.classList.remove('btn-primary');
+    } else {
+        agendaView.classList.add('d-none');
+        tablaView.classList.remove('d-none');
+        btnTabla.classList.add('btn-primary');
+        btnTabla.classList.remove('btn-outline-secondary');
+        btnAgenda.classList.add('btn-outline-secondary');
+        btnAgenda.classList.remove('btn-primary');
+    }
+}
+
+btnTabla.addEventListener('click', () => toggleView(false));
+btnAgenda.addEventListener('click', () => toggleView(true));
+toggleView(false);
+</script>
+{% endblock %}

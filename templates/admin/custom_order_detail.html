@@ -1,0 +1,343 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block title %}Pedido {{ pedido.code }} - Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <p class="text-muted small mb-1">Detalle de pedido personalizado</p>
+            <h2 class="mb-0">Pedido {{ pedido.code }}</h2>
+        </div>
+        <div class="d-flex gap-2">
+            <form method="post" action="{{ url_for('admin_custom_order_eliminar', order_id=pedido.id) }}" onsubmit="return confirm('¿Eliminar el pedido {{ pedido.code }}?');">
+                <button class="btn btn-outline-danger"><i class="bi bi-trash"></i> Eliminar</button>
+            </form>
+            <a href="{{ url_for('admin_custom_orders') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Cliente</h5>
+                    <p class="mb-1 fw-semibold">{{ pedido.client.name }}</p>
+                    <p class="text-muted mb-0"><i class="bi bi-telephone me-1"></i>{{ pedido.client.phone }}</p>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Estado</h5>
+                    <p class="mb-1"><span class="badge bg-primary-subtle text-primary">{{ CUSTOM_ORDER_STATUS_LABELS.get(pedido.status, pedido.status.title()) }}</span></p>
+                    <p class="mb-1"><strong>Urgente:</strong> {{ 'Sí' if pedido.is_urgent else 'No' }}</p>
+                    <p class="mb-1"><strong>Entrega:</strong> {{ pedido.delivery_date.strftime('%d/%m/%Y') if pedido.delivery_date else '-' }}</p>
+                    <p class="mb-1"><strong>Adelanto:</strong> Bs {{ '%.2f'|format(pedido.deposit or 0) }}</p>
+                    <p class="mb-0"><strong>Total:</strong> Bs {{ '%.2f'|format(pedido.total or 0) }}</p>
+                    <div class="mt-3 d-grid">
+                        <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold mb-0">Pedido</h5>
+                        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editOrderModal">
+                            <i class="bi bi-pencil"></i> Editar pedido
+                        </button>
+                    </div>
+                    <p class="mb-1"><strong>Prenda principal:</strong> {{ pedido.garment_type }}</p>
+                    <p class="mb-3"><strong>Observaciones:</strong> {{ pedido.observations or 'N/A' }}</p>
+                    {% set ref_flag = (pedido.measurements or {}).get('referencia_prenda') %}
+                    {% set ref_note = (pedido.measurements or {}).get('nota_referencia') %}
+                    {% if ref_flag %}
+                    <div class="alert alert-info d-flex align-items-start gap-2">
+                        <i class="bi bi-arrow-repeat"></i>
+                        <div>
+                            <div class="fw-semibold">Prenda de referencia</div>
+                            <div class="small mb-0">{{ ref_note or 'Usar medidas de la prenda dejada por el cliente.' }}</div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        {% for k,v in (pedido.measurements or {}).items() if k not in ['referencia_prenda','nota_referencia','_history'] %}
+                        <div class="col-md-4">
+                            <div class="p-2 bg-light rounded border">
+                                <div class="text-muted small text-uppercase">{{ k.replace('_',' ') }}</div>
+                                <div class="fw-semibold">{{ v }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% if not pedido.measurements %}
+                        <div class="col-12 text-muted">Sin medidas registradas.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold mb-0">Prendas en este pedido</h5>
+                        <span class="badge text-bg-light border">{{ pedido.items.count() }} prenda(s)</span>
+                    </div>
+                    {% if pedido.items.count() %}
+                    <div class="row g-3">
+                        {% for item in pedido.items %}
+                        <div class="col-md-6">
+                            <div class="border rounded p-3 h-100">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <div class="fw-semibold">{{ item.garment_type }}</div>
+                                        <div class="text-muted small">{{ item.created_at.strftime('%d/%m/%Y') }}</div>
+                                    </div>
+                                    <div class="btn-group btn-group-sm">
+                                        <button class="btn btn-outline-primary btn-edit-item"
+                                            data-item-id="{{ item.id }}"
+                                            data-garment="{{ item.garment_type }}"
+                                            data-measures='{{ item.measurements|tojson }}'>
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <form method="post" action="{{ url_for('admin_custom_order_item_eliminar', order_id=pedido.id, item_id=item.id) }}" onsubmit="return confirm('Eliminar la prenda?');">
+                                            <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash"></i></button>
+                                        </form>
+                                    </div>
+                                </div>
+                                {% set item_measures = item.measurements or {} %}
+                                {% if item_measures %}
+                                <div class="row g-2">
+                                    {% for k,v in item_measures.items() if k not in ['referencia_prenda','nota_referencia','_history'] %}
+                                    <div class="col-6">
+                                        <div class="small text-muted text-uppercase">{{ k.replace('_',' ') }}</div>
+                                        <div class="fw-semibold">{{ v }}</div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if item_measures.get('referencia_prenda') %}
+                                <div class="alert alert-info mt-2 py-1 px-2 mb-0">
+                                    <div class="small fw-semibold mb-0">Prenda de referencia</div>
+                                    <div class="small mb-0">{{ item_measures.get('nota_referencia','Usar como guia') }}</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Aún no hay prendas registradas.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Imágenes</h5>
+                    {% if pedido.images.count() %}
+                    <div class="row g-3">
+                        {% for img in pedido.images.all() %}
+                        <div class="col-6 col-md-4">
+                            <div class="ratio ratio-1x1 rounded overflow-hidden border">
+                                <img src="{{ url_for('static', filename='custom_orders/' ~ img.filename) }}" alt="img" class="w-100 h-100" style="object-fit: cover;">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Sin imágenes adjuntas.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Historial</h5>
+                    {% if history %}
+                    <ul class="list-group list-group-flush">
+                        {% for h in history|reverse %}
+                        <li class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-semibold">{{ CUSTOM_ORDER_STATUS_LABELS.get(h.estado, h.estado|title) }}</div>
+                                    {% if h.nota %}<div class="text-muted small">{{ h.nota }}</div>{% endif %}
+                                    <div class="text-muted small">Por: {{ h.usuario or 'sistema' }}</div>
+                                </div>
+                                <div class="text-muted small"><i class="bi bi-clock-history me-1"></i>{{ h.fecha }}</div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">Sin historial registrado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal editar pedido -->
+<div class="modal fade" id="editOrderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('admin_custom_order_editar', order_id=pedido.id) }}">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar pedido {{ pedido.code }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Fecha de entrega</label>
+            <input type="date" class="form-control" name="delivery_date" value="{{ pedido.delivery_date.strftime('%Y-%m-%d') if pedido.delivery_date }}">
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Adelanto</label>
+              <input type="number" step="0.01" class="form-control" name="deposit" value="{{ pedido.deposit or '' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Total</label>
+              <input type="number" step="0.01" class="form-control" name="total" value="{{ pedido.total or '' }}">
+            </div>
+          </div>
+          <div class="row g-3 mt-2">
+            <div class="col-md-6">
+              <label class="form-label">Estado</label>
+              <select name="status" class="form-select">
+                {% for st in CUSTOM_ORDER_STATUSES %}
+                <option value="{{ st }}" {% if pedido.status == st %}selected{% endif %}>{{ CUSTOM_ORDER_STATUS_LABELS.get(st, st.title()) }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+              <div class="form-check">
+                <input type="checkbox" class="form-check-input" name="is_urgent" id="editUrgent" {% if pedido.is_urgent %}checked{% endif %}>
+                <label class="form-check-label" for="editUrgent">Urgente</label>
+              </div>
+            </div>
+          </div>
+          <div class="mt-3">
+            <label class="form-label">Observaciones</label>
+            <textarea class="form-control" name="observations" rows="3">{{ pedido.observations or '' }}</textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal editar prenda -->
+<div class="modal fade" id="editItemModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="post" id="editItemForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Editar prenda</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="item_id" id="edit_item_id">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Tipo de prenda</label>
+              <select name="garment_type" id="edit_garment_type" class="form-select">
+                {% for t in CUSTOM_ORDER_TYPES %}
+                <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="row g-3 mt-3" id="editMeasurements">
+            {% for field in ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado'] %}
+            <div class="col-md-4 edit-measure" data-field="{{ field }}">
+              <label class="form-label text-capitalize">{{ field.replace('_',' ') }}</label>
+              <input type="text" class="form-control" name="{{ field }}" />
+            </div>
+            {% endfor %}
+          </div>
+          <div class="alert alert-light border mt-3">
+            <div class="form-check">
+              <input type="checkbox" class="form-check-input" name="reference_from_garment" id="edit_reference_from_garment">
+              <label class="form-check-label fw-semibold" for="edit_reference_from_garment">Prenda de referencia</label>
+            </div>
+            <div class="mt-2 d-none" id="editReferenceNotesBox">
+              <label class="form-label">Detalle de prenda de referencia</label>
+              <textarea class="form-control" name="reference_notes" rows="2" placeholder="Ej: Traje guía"></textarea>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar prenda</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const garmentFields = {{ GARMENT_FIELDS|tojson }};
+const editModal = document.getElementById('editItemModal');
+const editForm = document.getElementById('editItemForm');
+const editGarment = document.getElementById('edit_garment_type');
+const editMeasures = document.querySelectorAll('.edit-measure');
+const editRefCheckbox = document.getElementById('edit_reference_from_garment');
+const editRefNotesBox = document.getElementById('editReferenceNotesBox');
+const editRefNotesInput = editRefNotesBox ? editRefNotesBox.querySelector('textarea') : null;
+
+function toggleEditFields() {
+    const tipo = editGarment.value;
+    const visibles = garmentFields[tipo] || [];
+    editMeasures.forEach(el => {
+        el.style.display = visibles.includes(el.dataset.field) ? '' : 'none';
+        if (!visibles.includes(el.dataset.field)) {
+            const input = el.querySelector('input');
+            if (input) input.value = '';
+        }
+    });
+}
+
+function toggleEditReference() {
+    const show = editRefCheckbox.checked;
+    editRefNotesBox.classList.toggle('d-none', !show);
+    if (!show && editRefNotesInput) editRefNotesInput.value = '';
+}
+
+document.querySelectorAll('.btn-edit-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const itemId = btn.dataset.itemId;
+        const garment = btn.dataset.garment;
+        const measures = JSON.parse(btn.dataset.measures || '{}');
+        editForm.action = `/admin/pedidos-personalizados/{{ pedido.id }}/items/${itemId}/editar`;
+        document.getElementById('edit_item_id').value = itemId;
+        editGarment.value = garment;
+        toggleEditFields();
+        editMeasures.forEach(el => {
+            const input = el.querySelector('input');
+            const key = el.dataset.field;
+            if (input) input.value = measures[key] || '';
+        });
+        const refFlag = measures.referencia_prenda;
+        editRefCheckbox.checked = !!refFlag;
+        if (editRefNotesInput) {
+            editRefNotesInput.value = measures.nota_referencia || '';
+        }
+        toggleEditReference();
+        const modal = new bootstrap.Modal(editModal);
+        modal.show();
+    });
+});
+
+editGarment.addEventListener('change', toggleEditFields);
+editRefCheckbox.addEventListener('change', toggleEditReference);
+</script>
+{% endblock %}

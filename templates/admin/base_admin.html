@@ -1,25 +1,27 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Admin — Modas Pathy{% endblock %}</title>
-    
+
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/favicon.ico') }}">
-    
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
     <!-- CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    
+
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
-    
+
     <!-- Theme -->
     <style>
         :root {
@@ -30,11 +32,15 @@
             --bg-color: {{ active_theme.bg_color if active_theme else '#F8F9FA' }};
             --success: {{ active_theme.success if active_theme else '#2A9D8F' }};
             --error: {{ active_theme.error if active_theme else '#E63946' }};
+            --admin-sidebar-bg: #0f172a;
+            --admin-sidebar-hover: rgba(255, 255, 255, 0.08);
+            --admin-sidebar-active: rgba(255, 255, 255, 0.14);
         }
     </style>
-    
+
     {% block styles %}{% endblock %}
 </head>
+
 <body>
     <!-- Header -->
     <header class="navbar">
@@ -43,35 +49,37 @@
                 <button id="sidebarToggle" class="btn-toggle me-3" aria-label="Menú">
                     <i class="bi bi-list"></i>
                 </button>
-                
+
                 <a href="{{ url_for('admin_dashboard') }}" class="navbar-brand">
                     <img src="{{ url_for('static', filename='images/logo.png') }}" alt="Modas Pathy" height="36">
                     <span class="d-none d-md-inline">Modas Pathy</span>
                 </a>
             </div>
-            
+
             <div class="d-flex align-items-center gap-3">
                 <!-- Notifications -->
                 <div class="dropdown">
                     <button class="btn-toggle position-relative" data-bs-toggle="dropdown" aria-label="Notificaciones">
                         <i class="bi bi-bell"></i>
                         {% if notifications %}
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem;">
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+                            style="font-size: 0.65rem;">
                             {{ notifications|length }}
                         </span>
                         {% endif %}
                     </button>
-                    
+
                     <div class="dropdown-menu dropdown-menu-end notification-dropdown">
                         <div class="notification-header">
                             <i class="bi bi-bell me-2"></i>Notificaciones
                         </div>
-                        
+
                         {% if notifications %}
                         {% for notif in notifications[:5] %}
                         <div class="notification-item d-flex align-items-start">
                             <div class="notification-icon notification-icon-{{ notif.type }}">
-                                <i class="bi bi-{% if notif.type == 'success' %}check{% elif notif.type == 'warning' %}exclamation{% else %}info{% endif %}-circle"></i>
+                                <i
+                                    class="bi bi-{% if notif.type == 'success' %}check{% elif notif.type == 'warning' %}exclamation{% else %}info{% endif %}-circle"></i>
                             </div>
                             <div class="notification-content">
                                 <p class="notification-message">{{ notif.message }}</p>
@@ -89,33 +97,36 @@
                         {% endif %}
                     </div>
                 </div>
-                
+
                 <!-- User Menu -->
                 <div class="dropdown">
-                    <button class="d-flex align-items-center gap-2 bg-transparent border-0" 
-                            data-bs-toggle="dropdown"
-                            style="cursor: pointer;">
-                        <img src="{% if current_user.profile_image %}{{ url_for('static', filename='perfiles/' ~ current_user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}" 
-                             alt="{{ current_user.username }}"
-                             class="rounded-circle"
-                             style="width: 36px; height: 36px; object-fit: cover; border: 2px solid rgba(255,255,255,0.3);">
-                        <span class="text-white d-none d-md-inline">{{ current_user.name or current_user.username }}</span>
+                    <button class="d-flex align-items-center gap-2 bg-transparent border-0" data-bs-toggle="dropdown"
+                        style="cursor: pointer;">
+                        <img src="{% if current_user.profile_image %}{{ url_for('static', filename='perfiles/' ~ current_user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}"
+                            alt="{{ current_user.username }}" class="rounded-circle"
+                            style="width: 36px; height: 36px; object-fit: cover; border: 2px solid rgba(255,255,255,0.3);">
+                        <span class="text-white d-none d-md-inline">{{ current_user.name or current_user.username
+                            }}</span>
                         <i class="bi bi-chevron-down text-white-50"></i>
                     </button>
-                    
+
                     <ul class="dropdown-menu dropdown-menu-end">
                         <li>
                             <a class="dropdown-item" href="{{ url_for('admin_profile') }}">
                                 <i class="bi bi-person me-2"></i>Mi Perfil
                             </a>
                         </li>
-                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
                         <li>
                             <a class="dropdown-item" href="{{ url_for('index') }}" target="_blank">
                                 <i class="bi bi-box-arrow-up-right me-2"></i>Ver Tienda
                             </a>
                         </li>
-                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <hr class="dropdown-divider">
+                        </li>
                         <li>
                             <a class="dropdown-item text-danger" href="{{ url_for('admin_logout') }}">
                                 <i class="bi bi-box-arrow-right me-2"></i>Cerrar sesión
@@ -131,57 +142,89 @@
     <nav id="sidebarMenu" class="sidebar admin-sidebar">
         <ul class="nav flex-column py-3">
             <li class="nav-item">
-                <a href="{{ url_for('admin_dashboard') }}" 
-                   class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                <a href="{{ url_for('admin_dashboard') }}"
+                    class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
                     <i class="bi bi-speedometer2"></i>
                     <span>Dashboard</span>
                 </a>
             </li>
-            
+
             <li class="nav-item">
-                <a href="{{ url_for('admin_productos') }}" 
-                   class="nav-link {% if 'producto' in request.endpoint %}active{% endif %}">
+                <a href="{{ url_for('admin_productos') }}"
+                    class="nav-link {% if 'producto' in request.endpoint %}active{% endif %}">
                     <i class="bi bi-box-seam"></i>
                     <span>Productos</span>
                 </a>
             </li>
-            
+
             <li class="nav-item">
-                <a href="{{ url_for('admin_categorias') }}" 
-                   class="nav-link {% if 'categoria' in request.endpoint %}active{% endif %}">
+                <a href="{{ url_for('admin_pedidos') }}"
+                    class="nav-link {% if 'pedido' in request.endpoint %}active{% endif %}">
+                    <i class="bi bi-receipt-cutoff"></i>
+                    <span>Pedidos</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a href="{{ url_for('admin_clientes') }}"
+                    class="nav-link {% if 'cliente' in request.endpoint %}active{% endif %}">
+                    <i class="bi bi-people"></i>
+                    <span>Clientes</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a href="{{ url_for('admin_custom_orders') }}"
+                    class="nav-link {% if 'custom_order' in request.endpoint %}active{% endif %}">
+                    <i class="bi bi-scissors"></i>
+                    <span>Pedidos personalizados</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a href="{{ url_for('admin_categorias') }}"
+                    class="nav-link {% if 'categoria' in request.endpoint %}active{% endif %}">
                     <i class="bi bi-tags"></i>
                     <span>Categorías</span>
                 </a>
             </li>
-            
+
             <li class="nav-item">
-                <a href="{{ url_for('admin_contactos') }}" 
-                   class="nav-link {% if request.endpoint == 'admin_contactos' %}active{% endif %}">
+                <a href="{{ url_for('admin_contactos') }}"
+                    class="nav-link {% if request.endpoint == 'admin_contactos' %}active{% endif %}">
                     <i class="bi bi-telephone"></i>
                     <span>Contacto</span>
                 </a>
             </li>
-            
+
             {% if current_user.is_superadmin %}
             <li class="nav-item mt-3">
                 <span class="nav-link text-white-50 small text-uppercase" style="font-size: 0.75rem;">
                     Super Admin
                 </span>
             </li>
-            
+
             <li class="nav-item">
-                <a href="{{ url_for('admin_usuarios') }}" 
-                   class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}">
+                <a href="{{ url_for('admin_usuarios') }}"
+                    class="nav-link {% if 'usuario' in request.endpoint %}active{% endif %}">
                     <i class="bi bi-people"></i>
                     <span>Usuarios</span>
                 </a>
             </li>
-            
+
             <li class="nav-item">
-                <a href="{{ url_for('admin_themes') }}" 
-                   class="nav-link {% if 'theme' in request.endpoint %}active{% endif %}">
+                <a href="{{ url_for('admin_themes') }}"
+                    class="nav-link {% if 'theme' in request.endpoint %}active{% endif %}">
                     <i class="bi bi-palette"></i>
                     <span>Temas</span>
+                </a>
+            </li>
+
+            <li class="nav-item">
+                <a href="{{ url_for('admin_settings') }}"
+                    class="nav-link {% if 'settings' in request.endpoint or 'configuracion' in request.endpoint %}active{% endif %}">
+                    <i class="bi bi-gear"></i>
+                    <span>Configuración</span>
                 </a>
             </li>
             {% endif %}
@@ -196,7 +239,8 @@
         <div class="toast-container">
             {% for category, message in messages %}
             <div class="toast toast-{{ category }}" role="alert">
-                <i class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}-fill"></i>
+                <i
+                    class="bi bi-{% if category == 'success' %}check-circle{% elif category == 'danger' %}x-circle{% elif category == 'warning' %}exclamation-triangle{% else %}info-circle{% endif %}-fill"></i>
                 <span>{{ message }}</span>
                 <button type="button" class="btn-close" aria-label="Cerrar"></button>
             </div>
@@ -204,32 +248,32 @@
         </div>
         {% endif %}
         {% endwith %}
-        
+
         {% block content %}{% endblock %}
     </main>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    
+
     <script>
         // Sidebar Toggle
         const sidebarToggle = document.getElementById('sidebarToggle');
         const sidebar = document.getElementById('sidebarMenu');
-        
+
         sidebarToggle.addEventListener('click', () => {
             sidebar.classList.toggle('show');
         });
-        
+
         // Close sidebar on click outside (mobile)
         document.addEventListener('click', (e) => {
-            if (window.innerWidth < 992 && 
-                sidebar.classList.contains('show') && 
-                !sidebar.contains(e.target) && 
+            if (window.innerWidth < 992 &&
+                sidebar.classList.contains('show') &&
+                !sidebar.contains(e.target) &&
                 !sidebarToggle.contains(e.target)) {
                 sidebar.classList.remove('show');
             }
         });
-        
+
         // Toast auto-close
         document.querySelectorAll('.toast').forEach(toast => {
             const closeBtn = toast.querySelector('.btn-close');
@@ -242,7 +286,8 @@
             }, 5000);
         });
     </script>
-    
+
     {% block scripts %}{% endblock %}
 </body>
+
 </html>

@@ -1,0 +1,728 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block title %}{{ 'Nuevo Pedido Personalizado' if nuevo else 'Pedido Personalizado' }} - Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <p class="text-muted small mb-1">Gestión de pedidos personalizados</p>
+            <h2 class="mb-0">{{ 'Nuevo Pedido Personalizado' if nuevo else 'Editar Pedido' }}</h2>
+        </div>
+        <a href="{{ url_for('admin_custom_orders') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Volver
+        </a>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="alert alert-light border mb-4" id="resumenPedidoCard">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <div class="fw-bold mb-1">Resumen rápido</div>
+                        <div class="small text-muted">Revisa antes de confirmar: cliente, prendas, fecha y montos.</div>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="window.print()">
+                        <i class="bi bi-printer"></i> Imprimir
+                    </button>
+                </div>
+                <div class="row mt-2 g-2 small">
+                    <div class="col-md-4"><strong>Cliente:</strong> <span id="resumenCliente">-</span></div>
+                    <div class="col-md-2"><strong>Prendas:</strong> <span id="resumenPrendas">0</span></div>
+                    <div class="col-md-3"><strong>Entrega:</strong> <span id="resumenEntrega">-</span></div>
+                    <div class="col-md-3"><strong>Total:</strong> Bs <span id="resumenTotal">0.00</span></div>
+                    <div class="col-md-3"><strong>Adelanto:</strong> Bs <span id="resumenAdelanto">0.00</span></div>
+                </div>
+                <div class="mt-2">
+                    <strong class="small d-block mb-1">Prendas agregadas:</strong>
+                    <div id="resumenItems" class="small text-muted">Aun no hay prendas agregadas.</div>
+                </div>
+            </div>
+            <form method="post" enctype="multipart/form-data">
+                {{ form.hidden_tag() }}
+                {% if form.errors %}
+                <div class="alert alert-danger">
+                    <strong>Hay errores en el formulario:</strong>
+                    <ul class="mb-0">
+                        {% for field_name, field_errors in form.errors.items() %}
+                            {% for error in field_errors %}
+                                <li>{{ getattr(form, field_name).label.text }}: {{ error }}</li>
+                            {% endfor %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                <div class="row g-4">
+                    <div class="col-lg-8">
+                        <div id="stepCliente" class="mb-4">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <span class="badge text-bg-light border">Paso 1</span>
+                                <h5 class="fw-bold mb-0">Cliente</h5>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Buscar por telefono o nombre</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="clientSearch" placeholder="Ej: 70000000 o Maria">
+                                    <button class="btn btn-primary" type="button" id="btnSearchClient">
+                                        <i class="bi bi-search"></i> Buscar
+                                    </button>
+                                </div>
+                                <small class="text-muted">Valida si el cliente existe antes de crear uno nuevo.</small>
+                                <div class="small mt-2 text-primary" id="clientSearchStatus"></div>
+                            </div>
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-8">
+                                    <label class="form-label">Coincidencias</label>
+                                    {{ form.client_id(class="form-select", id="client_id") }}
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="alert alert-light border mb-0 small" id="clientSummary">
+                                        Selecciona un cliente o marca "Nuevo cliente".
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row g-3 mt-2 d-none" id="newClientGroup">
+                                <div class="col-md-6">
+                                    <label class="form-label">Telefono (nuevo)</label>
+                                    {{ form.new_client_phone(class="form-control", placeholder="Ej: 70000000") }}
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">Nombre (nuevo)</label>
+                                    {{ form.new_client_name(class="form-control", placeholder="Nombre completo si es cliente nuevo") }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="stepGarment" class="mb-4 d-none">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <span class="badge text-bg-light border">Paso 2</span>
+                                <h5 class="fw-bold mb-0">Tipo de prenda</h5>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">Tipo de prenda</label>
+                                    {{ form.garment_type(class="form-select", id="garment_type") }}
+                                    <small class="text-muted">Las medidas se adaptaran a la prenda seleccionada.</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="stepMeasures" class="mb-4 d-none">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="d-flex align-items-center gap-2">
+                                    <span class="badge text-bg-light border">Paso 3</span>
+                                    <h5 class="fw-bold mb-0">Prendas del pedido</h5>
+                                </div>
+                                <button class="btn btn-outline-primary btn-sm" type="button" id="btnSaveMeasures">
+                                    <i class="bi bi-save me-1"></i>Guardar/actualizar medidas del cliente
+                                </button>
+                            </div>
+                            <div class="row g-3 mt-2" id="measurements">
+                                {% for field in ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado'] %}
+                                <div class="col-md-4 measure-field" data-field="{{ field }}">
+                                    <label class="form-label text-capitalize">{{ field.replace('_',' ') }}</label>
+                                    {{ getattr(form, field)(class="form-control") }}
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <small class="text-muted">Solo se mostraran las medidas que aplican para la prenda seleccionada.</small>
+                            <div class="small text-danger mt-2 d-none" id="measureSaveWarning">Selecciona un cliente existente para guardar sus medidas.</div>
+                            <div class="alert alert-light border mt-3">
+                                <div class="form-check">
+                                    {{ form.reference_from_garment(class="form-check-input", id="reference_from_garment") }}
+                                    <label class="form-check-label fw-semibold" for="reference_from_garment">
+                                        El cliente dejó una prenda de referencia
+                                    </label>
+                                </div>
+                                <div class="mt-2 d-none" id="referenceNotesBox">
+                                    <label class="form-label">Detalle de la prenda de referencia</label>
+                                    {{ form.reference_notes(class="form-control", rows="2", placeholder="Ej: Traje azul talla 40, usar como guía de medidas") }}
+                                </div>
+                            </div>
+                            <div class="mt-3">
+                                <button type="button" class="btn btn-outline-success" id="btnAddItem">
+                                    <i class="bi bi-plus-circle me-1"></i>Agregar prenda a la lista
+                                </button>
+                            </div>
+                            <div class="mt-3">
+                                <h6 class="fw-bold">Prendas agregadas</h6>
+                                <div id="itemsList" class="small text-muted">Aun no hay prendas agregadas.</div>
+                            </div>
+                            {{ form.items_json(type="hidden", id="items_json") }}
+                        </div>
+
+                        <div id="stepFinal" class="mb-4 d-none">
+                            <div class="d-flex align-items-center gap-2 mb-3">
+                                <span class="badge text-bg-light border">Paso 4</span>
+                                <h5 class="fw-bold mb-0">Fechas, montos y adjuntos</h5>
+                            </div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label">Fecha de entrega</label>
+                                    {{ form.delivery_date(class="form-control", type="date", required=True) }}
+                                </div>
+                                <div class="col-md-4 d-flex align-items-center">
+                                    <div class="form-check mt-3">
+                                        {{ form.is_urgent(class="form-check-input", id="is_urgent") }}
+                                        <label class="form-check-label" for="is_urgent">Urgente</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Estado</label>
+                                    {{ form.status(class="form-select") }}
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Adelanto</label>
+                                    {{ form.deposit(class="form-control", placeholder="0.00") }}
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Total *</label>
+                                    {{ form.total(class="form-control", placeholder="0.00", required=True) }}
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <h6 class="fw-bold mb-2">Observaciones</h6>
+                                {{ form.observations(class="form-control", rows="3", placeholder="Notas adicionales...") }}
+                            </div>
+
+                            <div class="mt-4">
+                                <h6 class="fw-bold mb-2">Imagenes</h6>
+                                {{ form.images(class="form-control", multiple=true) }}
+                                <small class="text-muted">Puedes subir varias imagenes de telas o referencias.</small>
+                            </div>
+                        </div>
+<div class="col-lg-4">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h5 class="fw-bold">Resumen</h5>
+                                <p class="text-muted small mb-3">Completa la información requerida para registrar el pedido.</p>
+                                <div class="d-grid gap-2 sticky-actions">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="bi bi-check-circle me-1"></i>Guardar pedido
+                                    </button>
+                                    <a href="{{ url_for('admin_custom_orders') }}" class="btn btn-light">Cancelar</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmacion de resumen antes de guardar -->
+<div class="modal fade" id="confirmResumenModal" tabindex="-1" aria-labelledby="confirmResumenLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-full-mobile">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmResumenLabel">Confirma el pedido</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-6"><strong>Cliente:</strong> <span id="confirmResumenCliente">-</span></div>
+                    <div class="col-md-3"><strong>Prendas:</strong> <span id="confirmResumenPrendas">0</span></div>
+                    <div class="col-md-3"><strong>Entrega:</strong> <span id="confirmResumenEntrega">-</span></div>
+                    <div class="col-md-3"><strong>Total:</strong> Bs <span id="confirmResumenTotal">0.00</span></div>
+                    <div class="col-md-3"><strong>Adelanto:</strong> Bs <span id="confirmResumenAdelanto">0.00</span></div>
+                </div>
+                <div class="mt-3">
+                    <strong>Prendas agregadas</strong>
+                    <div class="small text-muted" id="confirmResumenItems">Aun no hay prendas agregadas.</div>
+                </div>
+                <div class="mt-3">
+                    <strong>Observaciones</strong>
+                    <div class="small" id="confirmResumenObservaciones">-</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-outline-secondary" id="confirmResumenPrint">Imprimir</button>
+                <button type="button" class="btn btn-outline-primary" id="confirmResumenDownload">Descargar imagen</button>
+                <button type="button" class="btn btn-primary" id="confirmResumenSubmit">Confirmar y guardar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+@media (max-width: 768px) {
+    .container-fluid.py-4 { padding: 1rem 0.5rem; }
+    #resumenPedidoCard { border-radius: 12px; }
+    .sticky-actions {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #fff;
+        padding: 0.75rem 1rem;
+        box-shadow: 0 -6px 20px rgba(0,0,0,0.08);
+        z-index: 1050;
+    }
+    .sticky-actions .btn { height: 48px; }
+    body { padding-bottom: 110px; }
+    .card .card-body { padding: 1rem; }
+    .modal-full-mobile { margin: 0; }
+    .modal-full-mobile .modal-content { min-height: 90vh; }
+}
+</style>
+<script>
+const garmentFields = {{ GARMENT_FIELDS|tojson }};
+const clientSelect = document.getElementById('client_id');
+const garmentSelect = document.getElementById('garment_type');
+const measureFields = document.querySelectorAll('.measure-field');
+const btnSaveMeasures = document.getElementById('btnSaveMeasures');
+const clientSearch = document.getElementById('clientSearch');
+const btnSearchClient = document.getElementById('btnSearchClient');
+const newClientGroup = document.getElementById('newClientGroup');
+const clientSummary = document.getElementById('clientSummary');
+const clientSearchStatus = document.getElementById('clientSearchStatus');
+const stepGarment = document.getElementById('stepGarment');
+const stepMeasures = document.getElementById('stepMeasures');
+const stepFinal = document.getElementById('stepFinal');
+const measureWarning = document.getElementById('measureSaveWarning');
+const inputNewPhone = document.querySelector('#newClientGroup input[name="new_client_phone"]');
+const inputNewName = document.querySelector('#newClientGroup input[name="new_client_name"]');
+const refCheckbox = document.getElementById('reference_from_garment');
+const refNotesBox = document.getElementById('referenceNotesBox');
+const refNotesInput = refNotesBox ? refNotesBox.querySelector('textarea') : null;
+const btnAddItem = document.getElementById('btnAddItem');
+const itemsListEl = document.getElementById('itemsList');
+const itemsJsonInput = document.getElementById('items_json');
+const formElement = document.querySelector('form');
+let itemsList = [];
+let editingIndex = null;
+const resumenCliente = document.getElementById('resumenCliente');
+const resumenPrendas = document.getElementById('resumenPrendas');
+const resumenEntrega = document.getElementById('resumenEntrega');
+const resumenTotal = document.getElementById('resumenTotal');
+const resumenAdelanto = document.getElementById('resumenAdelanto');
+const resumenItems = document.getElementById('resumenItems');
+const inputTotal = document.querySelector('input[name="total"]');
+const inputDeposit = document.querySelector('input[name="deposit"]');
+const inputDelivery = document.querySelector('input[name="delivery_date"]');
+const observationsInput = document.querySelector('textarea[name="observations"]');
+const confirmModalEl = document.getElementById('confirmResumenModal');
+const confirmBtn = document.getElementById('confirmResumenSubmit');
+const confirmPrintBtn = document.getElementById('confirmResumenPrint');
+const confirmDownloadBtn = document.getElementById('confirmResumenDownload');
+const confirmResumenCliente = document.getElementById('confirmResumenCliente');
+const confirmResumenPrendas = document.getElementById('confirmResumenPrendas');
+const confirmResumenEntrega = document.getElementById('confirmResumenEntrega');
+const confirmResumenTotal = document.getElementById('confirmResumenTotal');
+const confirmResumenAdelanto = document.getElementById('confirmResumenAdelanto');
+const confirmResumenItems = document.getElementById('confirmResumenItems');
+const confirmResumenObservaciones = document.getElementById('confirmResumenObservaciones');
+let submitConfirmed = false;
+
+function visibleFields(tipo) {
+    const visibles = garmentFields[tipo] || [];
+    measureFields.forEach(el => {
+        el.style.display = visibles.includes(el.dataset.field) ? '' : 'none';
+        if (!visibles.includes(el.dataset.field)) {
+            const input = el.querySelector('input');
+            if (input) input.value = '';
+        }
+    });
+}
+
+function resetMeasures() {
+    measureFields.forEach(el => {
+        const input = el.querySelector('input');
+        if (input) input.value = '';
+    });
+}
+
+function clientReady() {
+    const isExisting = clientSelect.value && clientSelect.value !== '0';
+    const hasNewData = !!(inputNewPhone && inputNewPhone.value) && !!(inputNewName && inputNewName.value);
+    return isExisting || hasNewData;
+}
+
+function updateFlow() {
+    const readyClient = clientReady();
+    const hasGarment = !!garmentSelect.value;
+    stepGarment.classList.toggle('d-none', !readyClient);
+    stepMeasures.classList.toggle('d-none', !(readyClient && hasGarment));
+    stepFinal.classList.toggle('d-none', !(readyClient && hasGarment));
+    btnSaveMeasures.disabled = clientSelect.value === '0';
+    measureWarning.classList.toggle('d-none', clientSelect.value !== '0');
+}
+
+function toggleReferenceNotes() {
+    if (!refCheckbox || !refNotesBox) return;
+    const show = refCheckbox.checked;
+    refNotesBox.classList.toggle('d-none', !show);
+    if (!show && refNotesInput) {
+        refNotesInput.value = '';
+    }
+}
+
+function updateSummary() {
+    const selected = clientSelect.options[clientSelect.selectedIndex];
+    if (selected && selected.value !== '0') {
+        clientSummary.innerHTML = `<strong>${selected.text}</strong>`;
+    } else {
+        clientSummary.textContent = 'Selecciona un cliente o marca "Nuevo cliente".';
+    }
+}
+
+async function searchClient() {
+    const term = clientSearch.value.trim();
+    if (!term) {
+        clientSearchStatus.textContent = 'Ingresa un telefono o nombre para buscar.';
+        return;
+    }
+    clientSearchStatus.textContent = 'Buscando...';
+    try {
+        const res = await fetch(`/api/clientes/buscar?q=${encodeURIComponent(term)}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        clientSelect.innerHTML = '';
+        clientSelect.append(new Option('Nuevo cliente', '0'));
+        const newNameVal = (inputNewName && inputNewName.value ? inputNewName.value.trim().toLowerCase() : '');
+        if (data.length) {
+            data.forEach(c => clientSelect.append(new Option(`${c.name} (${c.phone})`, c.id)));
+            clientSearchStatus.textContent = `${data.length} resultado(s) encontrados. Selecciona manualmente el cliente correcto.`;
+            const sameName = data.some(c => c.name && c.name.trim().toLowerCase() === newNameVal && newNameVal);
+            if (sameName && newNameVal) {
+                clientSearchStatus.textContent += ' Coincidencia exacta de nombre, verifica apellidos.';
+            }
+            clientSelect.value = '0'; // no autoseleccionamos para evitar confundir nombres
+            newClientGroup.classList.remove('d-none');
+        } else {
+            clientSearchStatus.textContent = 'No encontramos cliente, completa los datos para crearlo.';
+            clientSelect.value = '0';
+            newClientGroup.classList.remove('d-none');
+            resetMeasures();
+        }
+        updateSummary();
+        updateFlow();
+    } catch (err) {
+        console.error(err);
+        clientSearchStatus.textContent = 'No se pudo buscar, intenta de nuevo.';
+    }
+}
+
+async function loadMeasures() {
+    const clientId = clientSelect.value;
+    const tipo = garmentSelect.value;
+    if (!clientId || clientId === '0') return;
+    try {
+        const res = await fetch(`/api/clientes/${clientId}/medidas?prenda=${encodeURIComponent(tipo)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        resetMeasures();
+        Object.entries(data || {}).forEach(([k,v]) => {
+            const el = document.querySelector(`[data-field="${k}"] input`);
+            if (el) el.value = v;
+        });
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+async function saveMeasures() {
+    const clientId = clientSelect.value;
+    const tipo = garmentSelect.value;
+    if (!clientId || clientId === '0') {
+        alert('Selecciona un cliente existente para guardar medidas.');
+        return;
+    }
+    const payload = { garment_type: tipo, measurements: {} };
+    measureFields.forEach(el => {
+        const input = el.querySelector('input');
+        if (el.style.display !== 'none' && input && input.value) {
+            payload.measurements[el.dataset.field] = input.value;
+        }
+    });
+    try {
+        const res = await fetch(`/api/clientes/${clientId}/medidas`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error();
+        alert('Medidas guardadas para el cliente.');
+    } catch (err) {
+        alert('No se pudieron guardar las medidas.');
+    }
+}
+
+function renderItems() {
+    if (!itemsListEl) return;
+    if (!itemsList.length) {
+        itemsListEl.textContent = 'Aun no hay prendas agregadas.';
+        return;
+    }
+    const html = itemsList.map((it, idx) => {
+        const entries = Object.entries(it.measurements || {}).filter(([k,_]) => !['referencia_prenda','nota_referencia'].includes(k));
+        const measures = entries.map(([k,v]) => `<span class="badge text-bg-light border me-1 mb-1">${k.replace('_',' ')}: ${v}</span>`).join(' ');
+        const ref = (it.measurements || {}).referencia_prenda ? '<span class="badge bg-info text-dark ms-1">Ref</span>' : '';
+        return `<div class="border rounded p-2 mb-2 d-flex justify-content-between align-items-start">
+            <div>
+                <div class="fw-semibold">${idx+1}. ${it.garment_type} ${ref}</div>
+                ${measures || '<div class="text-muted small">Sin medidas</div>'}
+            </div>
+            <div class="btn-group btn-group-sm">
+                <button type="button" class="btn btn-outline-primary" data-action="edit-item" data-index="${idx}"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="btn btn-outline-danger" data-action="delete-item" data-index="${idx}"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`;
+    }).join('');
+    itemsListEl.innerHTML = html;
+}
+
+function addItemToList() {
+    const tipo = garmentSelect.value;
+    if (!tipo) {
+        alert('Selecciona el tipo de prenda.');
+        return;
+    }
+    const measurements = {};
+    measureFields.forEach(el => {
+        if (el.style.display === 'none') return;
+        const input = el.querySelector('input');
+        if (input && input.value) {
+            measurements[el.dataset.field] = input.value;
+        }
+    });
+    if (refCheckbox && refCheckbox.checked) {
+        measurements.referencia_prenda = 'Si';
+        if (refNotesInput && refNotesInput.value) {
+            measurements.nota_referencia = refNotesInput.value;
+        }
+    }
+    if (editingIndex !== null) {
+        itemsList[editingIndex] = { garment_type: tipo, measurements };
+        editingIndex = null;
+        btnAddItem.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Agregar prenda a la lista';
+        btnAddItem.classList.remove('btn-warning');
+        btnAddItem.classList.add('btn-outline-success');
+    } else {
+        itemsList.push({ garment_type: tipo, measurements });
+    }
+    renderItems();
+    updateResumen();
+    measureFields.forEach(el => {
+        const input = el.querySelector('input');
+        if (input) input.value = '';
+    });
+    if (refNotesInput) refNotesInput.value = '';
+    if (refCheckbox) refCheckbox.checked = false;
+    toggleReferenceNotes();
+}
+
+garmentSelect.addEventListener('change', () => {
+    visibleFields(garmentSelect.value);
+    loadMeasures();
+    updateFlow();
+});
+clientSelect.addEventListener('change', () => {
+    updateSummary();
+    if (clientSelect.value === '0') {
+        newClientGroup.classList.remove('d-none');
+        resetMeasures();
+    } else {
+        newClientGroup.classList.add('d-none');
+        loadMeasures();
+    }
+    updateFlow();
+});
+document.querySelectorAll('#newClientGroup input').forEach(input => {
+    input.addEventListener('input', updateFlow);
+});
+btnSaveMeasures.addEventListener('click', saveMeasures);
+btnSearchClient.addEventListener('click', searchClient);
+clientSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        searchClient();
+    }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+    visibleFields(garmentSelect.value);
+    updateSummary();
+    updateFlow();
+    if (clientSelect.value === '0') {
+        newClientGroup.classList.remove('d-none');
+    }
+    toggleReferenceNotes();
+    renderItems();
+    updateResumen();
+});
+
+if (refCheckbox) {
+    refCheckbox.addEventListener('change', toggleReferenceNotes);
+}
+
+if (btnAddItem) {
+    btnAddItem.addEventListener('click', addItemToList);
+}
+
+if (itemsListEl) {
+    itemsListEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const idx = parseInt(btn.dataset.index, 10);
+        if (isNaN(idx)) return;
+        if (btn.dataset.action === 'delete-item') {
+            itemsList.splice(idx, 1);
+            renderItems();
+            updateResumen();
+            return;
+        }
+        if (btn.dataset.action === 'edit-item') {
+            const item = itemsList[idx];
+            if (!item) return;
+            garmentSelect.value = item.garment_type;
+            visibleFields(garmentSelect.value);
+            resetMeasures();
+            Object.entries(item.measurements || {}).forEach(([k,v]) => {
+                const el = document.querySelector(`[data-field="${k}"] input`);
+                if (el) el.value = v;
+            });
+            if (refCheckbox) {
+                refCheckbox.checked = !!item.measurements?.referencia_prenda;
+            }
+            if (refNotesInput) {
+                refNotesInput.value = item.measurements?.nota_referencia || '';
+            }
+            toggleReferenceNotes();
+            editingIndex = idx;
+            btnAddItem.innerHTML = '<i class="bi bi-save me-1"></i>Actualizar prenda';
+            btnAddItem.classList.remove('btn-outline-success');
+            btnAddItem.classList.add('btn-warning');
+        }
+    });
+}
+
+
+
+if (formElement) {
+    formElement.addEventListener('submit', (e) => {
+        e.stopImmediatePropagation();
+        if (submitConfirmed) return;
+        // Si el usuario no uso el boton "Agregar prenda a la lista"
+        if (!itemsList.length) {
+            const tipo = garmentSelect.value;
+            const measurements = {};
+            let hasMeasurements = false;
+            measureFields.forEach(el => {
+                if (el.style.display === 'none') return;
+                const input = el.querySelector('input');
+                if (input && input.value) {
+                    measurements[el.dataset.field] = input.value;
+                    hasMeasurements = true;
+                }
+            });
+            if (refCheckbox && refCheckbox.checked) {
+                measurements.referencia_prenda = 'Si';
+                if (refNotesInput && refNotesInput.value) {
+                    measurements.nota_referencia = refNotesInput.value;
+                }
+            }
+            if (!tipo || (!hasMeasurements && Object.keys(measurements).length === 0)) {
+                e.preventDefault();
+                alert('Debes agregar al menos una prenda al pedido.');
+                return;
+            }
+            itemsList.push({ garment_type: tipo, measurements });
+        }
+
+        if (itemsJsonInput) {
+            itemsJsonInput.value = JSON.stringify(itemsList);
+        }
+
+        if (confirmModalEl && typeof bootstrap !== 'undefined') {
+            e.preventDefault();
+            const selected = clientSelect.options[clientSelect.selectedIndex];
+            confirmResumenCliente.textContent = (selected && selected.value !== '0') ? selected.text : (inputNewName?.value || '-');
+            confirmResumenPrendas.textContent = itemsList.length;
+            confirmResumenEntrega.textContent = inputDelivery && inputDelivery.value ? inputDelivery.value : '-';
+            confirmResumenTotal.textContent = inputTotal && inputTotal.value ? parseFloat(inputTotal.value).toFixed(2) : '0.00';
+            confirmResumenAdelanto.textContent = inputDeposit && inputDeposit.value ? parseFloat(inputDeposit.value).toFixed(2) : '0.00';
+            confirmResumenItems.textContent = itemsList.length ? itemsList.map((it, idx) => `${idx + 1}. ${it.garment_type}`).join(' | ') : 'Aun no hay prendas agregadas.';
+            confirmResumenObservaciones.textContent = observationsInput && observationsInput.value ? observationsInput.value : '-';
+            const modal = new bootstrap.Modal(confirmModalEl);
+            modal.show();
+            if (confirmBtn) {
+                confirmBtn.onclick = () => {
+                    submitConfirmed = true;
+                    modal.hide();
+                    formElement.submit();
+                };
+            }
+        } else {
+            submitConfirmed = true;
+        }
+    }, true);
+}
+
+function updateResumen() {
+    if (resumenPrendas) resumenPrendas.textContent = itemsList.length;
+    if (resumenCliente) {
+        const selected = clientSelect.options[clientSelect.selectedIndex];
+        resumenCliente.textContent = (selected && selected.value !== '0') ? selected.text : (inputNewName?.value || '-');
+    }
+    if (resumenEntrega) resumenEntrega.textContent = inputDelivery && inputDelivery.value ? inputDelivery.value : '-';
+    if (resumenTotal) resumenTotal.textContent = inputTotal && inputTotal.value ? parseFloat(inputTotal.value).toFixed(2) : '0.00';
+    if (resumenAdelanto) resumenAdelanto.textContent = inputDeposit && inputDeposit.value ? parseFloat(inputDeposit.value).toFixed(2) : '0.00';
+    if (resumenItems) {
+        if (!itemsList.length) {
+            resumenItems.textContent = 'Aun no hay prendas agregadas.';
+        } else {
+            resumenItems.innerHTML = itemsList.map((it, idx) => {
+                return `${idx + 1}. ${it.garment_type}`;
+            }).join(' | ');
+        }
+    }
+}
+
+if (inputTotal) inputTotal.addEventListener('input', updateResumen);
+if (inputDeposit) inputDeposit.addEventListener('input', updateResumen);
+if (inputDelivery) inputDelivery.addEventListener('change', updateResumen);
+if (inputNewName) inputNewName.addEventListener('input', () => {
+    updateResumen();
+});
+clientSelect.addEventListener('change', updateResumen);
+
+function downloadResumenImagen() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 900;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    ctx.font = '20px Arial';
+    ctx.fillText('Resumen de pedido personalizado', 20, 40);
+    ctx.font = '16px Arial';
+    ctx.fillText(`Cliente: ${confirmResumenCliente.textContent}`, 20, 80);
+    ctx.fillText(`Prendas: ${confirmResumenPrendas.textContent}`, 20, 110);
+    ctx.fillText(`Entrega: ${confirmResumenEntrega.textContent}`, 20, 140);
+    ctx.fillText(`Total: Bs ${confirmResumenTotal.textContent}`, 20, 170);
+    ctx.fillText(`Adelanto: Bs ${confirmResumenAdelanto.textContent}`, 20, 200);
+    ctx.fillText('Prendas agregadas:', 20, 230);
+    const itemsLines = confirmResumenItems.textContent || '';
+    ctx.fillText(itemsLines, 20, 260);
+    ctx.fillText(`Observaciones: ${confirmResumenObservaciones.textContent}`, 20, 290);
+    const link = document.createElement('a');
+    link.download = 'resumen_pedido.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+if (confirmPrintBtn) {
+    confirmPrintBtn.addEventListener('click', () => window.print());
+}
+if (confirmDownloadBtn) {
+    confirmDownloadBtn.addEventListener('click', downloadResumenImagen);
+}
+</script>
+{% endblock %}

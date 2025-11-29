@@ -6,7 +6,8 @@ Versión 2.0 - Código refactorizado y optimizado
 import os
 import re
 import random
-from datetime import datetime
+import requests
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (
@@ -22,15 +23,16 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, MultipleFileField, FileField
 from wtforms import (
     StringField, PasswordField, SubmitField, FloatField,
-    TextAreaField, SelectField, BooleanField
+    TextAreaField, SelectField, BooleanField, DateField, HiddenField
 )
 from wtforms.validators import (
-    DataRequired, Length, Optional, EqualTo, Regexp, NumberRange
+    DataRequired, InputRequired, Length, Optional, EqualTo, Regexp, NumberRange
 )
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-from sqlalchemy import or_
+from sqlalchemy import or_, JSON
+from sqlalchemy.orm.attributes import flag_modified
 
 from config import config
 
@@ -50,9 +52,11 @@ login_manager.login_message_category = 'info'
 # Crear carpetas necesarias
 UPLOAD_FOLDER = app.config.get('UPLOAD_FOLDER', os.path.join('static', 'uploads'))
 PROFILE_FOLDER = app.config.get('PROFILE_FOLDER', os.path.join('static', 'perfiles'))
+QR_FOLDER = app.config.get('QR_FOLDER', os.path.join('static', 'qr'))
+CUSTOM_ORDER_FOLDER = app.config.get('CUSTOM_ORDER_FOLDER', os.path.join('static', 'custom_orders'))
 ALLOWED_EXTENSIONS = app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg', 'gif', 'webp'})
 
-for folder in (UPLOAD_FOLDER, PROFILE_FOLDER):
+for folder in (UPLOAD_FOLDER, PROFILE_FOLDER, QR_FOLDER, CUSTOM_ORDER_FOLDER):
     os.makedirs(folder, exist_ok=True)
 
 
@@ -114,6 +118,8 @@ class Product(db.Model):
     original_price = db.Column(db.Float)  # Para mostrar descuentos
     stock = db.Column(db.Integer, default=0)
     sku = db.Column(db.String(50))
+    is_on_sale = db.Column(db.Boolean, default=False)
+    promo_text = db.Column(db.String(80))
     
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), index=True)
     
@@ -128,6 +134,7 @@ class Product(db.Model):
     
     images = db.relationship('ProductImage', backref='product', lazy='dynamic',
                             cascade='all, delete-orphan')
+    orders = db.relationship('Order', back_populates='product', cascade='all, delete-orphan')
     
     @property
     def main_image(self):
@@ -140,7 +147,7 @@ class Product(db.Model):
     @property
     def has_discount(self):
         """Verifica si el producto tiene descuento"""
-        return self.original_price and self.original_price > self.price
+        return bool(self.is_on_sale and self.original_price and self.original_price > self.price)
     
     @property
     def discount_percent(self):
@@ -148,6 +155,11 @@ class Product(db.Model):
         if self.has_discount:
             return int(((self.original_price - self.price) / self.original_price) * 100)
         return 0
+    
+    @property
+    def promo_label(self):
+        """Texto de badge promocional"""
+        return (self.promo_text or '').strip() or 'Oferta'
     
     def __repr__(self):
         return f'<Product {self.name}>'
@@ -166,6 +178,92 @@ class ProductImage(db.Model):
     
     def __repr__(self):
         return f'<ProductImage {self.filename}>'
+
+
+class Order(db.Model):
+    """Modelo de pedidos"""
+    __tablename__ = 'orders'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    order_code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    image_url = db.Column(db.String(512))
+    payment_method = db.Column(db.String(20), nullable=False)  # whatsapp / paypal / qr
+    total = db.Column(db.Float, nullable=False, default=0)
+    status = db.Column(db.String(50), default='Recibido')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    customer_name = db.Column(db.String(128))
+    customer_phone = db.Column(db.String(32))
+    history = db.Column(JSON, default=list)
+    order_notes = db.Column(db.Text)
+    
+    product = db.relationship('Product', back_populates='orders')
+    
+    def __repr__(self):
+        return f'<Order {self.order_code}>'
+
+
+class Client(db.Model):
+    """Cliente para pedidos personalizados"""
+    __tablename__ = 'clients'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    phone = db.Column(db.String(32), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    measurements = db.Column(JSON, default=dict)  # Medidas por tipo de prenda
+    
+    custom_orders = db.relationship('CustomOrder', back_populates='client', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<Client {self.name}>'
+
+
+class CustomOrder(db.Model):
+    """Pedido personalizado (sastreria)"""
+    __tablename__ = 'custom_orders'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    garment_type = db.Column(db.String(40), nullable=False)
+    delivery_date = db.Column(db.Date)
+    deposit = db.Column(db.Float)
+    total = db.Column(db.Float, nullable=False, default=0)
+    observations = db.Column(db.Text)
+    is_urgent = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String(30), default='pendiente')
+    measurements = db.Column(JSON, default=dict)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    client = db.relationship('Client', back_populates='custom_orders')
+    images = db.relationship('CustomOrderImage', backref='order', cascade='all, delete-orphan', lazy='dynamic')
+    items = db.relationship('CustomOrderItem', backref='order', cascade='all, delete-orphan', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<CustomOrder {self.code}>'
+
+
+class CustomOrderImage(db.Model):
+    """Imagenes asociadas a pedidos personalizados"""
+    __tablename__ = 'custom_order_images'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    filename = db.Column(db.String(256), nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey('custom_orders.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class CustomOrderItem(db.Model):
+    """Prendas asociadas a un pedido personalizado"""
+    __tablename__ = 'custom_order_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('custom_orders.id'), nullable=False, index=True)
+    garment_type = db.Column(db.String(40), nullable=False)
+    measurements = db.Column(JSON, default=dict)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
 class Theme(db.Model):
@@ -235,194 +333,408 @@ class SiteSettings(db.Model):
     meta_keywords = db.Column(db.String(300))
     show_prices = db.Column(db.Boolean, default=True)
     maintenance_mode = db.Column(db.Boolean, default=False)
-
-
-# ═══════════════════════════════════════════════════════════════════════════
+    exchange_rate = db.Column(db.Float, default=6.96)
+    qr_image = db.Column(db.String(256))
+# -------------------------------------------------
 #                            FORMULARIOS
-# ═══════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------
 
-HEX_COLOR = Regexp(r'^#(?:[0-9a-fA-F]{3}){1,2}$', message='Debe ser un color hex válido')
+ORDER_STATUSES = [
+    'Pagado',
+    'Recibido',
+    'Confeccionando',
+    'Preparando envio',
+    'En camino',
+    'Entregado'
+]
 
+CUSTOM_ORDER_TYPES = [
+    'Blusa Cochala',
+    'Blusa Sucrena',
+    'Pollera Cochala',
+    'Pollera Sucrena',
+    'Centro Cochala',
+    'Centro Sucrena'
+]
+
+CUSTOM_ORDER_STATUSES = [
+    'pendiente',
+    'diseno',
+    'corte',
+    'confeccion',
+    'prueba',
+    'ajustes',
+    'listo',
+    'entregado',
+    'en proceso'  # Compatibilidad con estados anteriores
+]
+
+CUSTOM_ORDER_STATUS_LABELS = {
+    'pendiente': 'Pendiente',
+    'diseno': 'En diseño',
+    'corte': 'En corte',
+    'confeccion': 'En confección',
+    'prueba': 'En prueba',
+    'ajustes': 'Ajustes',
+    'listo': 'Listo',
+    'entregado': 'Entregado',
+    'en proceso': 'En proceso'
+}
+
+# Campos de medidas por tipo
+GARMENT_FIELDS = {
+    'Blusa Cochala': ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura'],
+    'Blusa Sucrena': ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura'],
+    'Pollera Cochala': ['cintura','alforza','panos','wato','corridas','color'],
+    'Pollera Sucrena': ['cintura','cadera','talla','panos','quebrado','wato','color','figura'],
+    'Centro Cochala': ['cintura','talla'],
+    'Centro Sucrena': ['cintura','cadera','quebrado','talla']
+}
+
+HEX_COLOR = Regexp(r'^#(?:[0-9a-fA-F]{3}){1,2}$', message='Debe ser un color hex valido')
 
 class LoginForm(FlaskForm):
-    """Formulario de inicio de sesión"""
-    username = StringField('Usuario', validators=[
-        DataRequired(message='El usuario es requerido')
-    ])
-    password = PasswordField('Contraseña', validators=[
-        DataRequired(message='La contraseña es requerida')
-    ])
+    username = StringField('Usuario', validators=[DataRequired(message='El usuario es requerido')])
+    password = PasswordField('Contrasena', validators=[DataRequired(message='La contrasena es requerida')])
     remember = BooleanField('Recordarme')
     submit = SubmitField('Ingresar')
 
-
 class CategoryForm(FlaskForm):
-    """Formulario de categoría"""
-    name = StringField('Nombre', validators=[
-        DataRequired(), Length(max=64)
-    ])
-    description = TextAreaField('Descripción', validators=[
-        Optional(), Length(max=256)
-    ])
-    icon = StringField('Icono (Bootstrap Icons)', validators=[
-        Optional(), Length(max=50)
-    ])
+    name = StringField('Nombre', validators=[DataRequired(), Length(max=64)])
+    description = TextAreaField('Descripcion', validators=[Optional(), Length(max=256)])
+    icon = StringField('Icono (Bootstrap Icons)', validators=[Optional(), Length(max=50)])
     is_active = BooleanField('Activa', default=True)
     submit = SubmitField('Guardar')
 
-
 class ProductForm(FlaskForm):
-    """Formulario de producto"""
-    name = StringField('Nombre', validators=[
-        DataRequired(), Length(max=128)
-    ])
-    description = TextAreaField('Descripción', validators=[Optional()])
-    price = FloatField('Precio (Bs)', validators=[
-        DataRequired(), NumberRange(min=0, message='El precio debe ser positivo')
-    ])
-    original_price = FloatField('Precio Original (opcional)', validators=[
-        Optional(), NumberRange(min=0)
-    ])
-    category = SelectField('Categoría', coerce=int, validators=[DataRequired()])
-    images = MultipleFileField('Imágenes', validators=[
-        FileAllowed(ALLOWED_EXTENSIONS, 'Solo imágenes permitidas')
-    ])
+    name = StringField('Nombre', validators=[DataRequired(), Length(max=128)])
+    description = TextAreaField('Descripcion', validators=[Optional()])
+    price = FloatField('Precio (Bs)', validators=[DataRequired(), NumberRange(min=0, message='El precio debe ser positivo')])
+    original_price = FloatField('Precio Original (opcional)', validators=[Optional(), NumberRange(min=0)])
+    is_on_sale = BooleanField('En oferta')
+    promo_text = StringField('Texto promocional', validators=[Optional(), Length(max=80)])
+    category = SelectField('Categoria', coerce=int, validators=[DataRequired()])
+    images = MultipleFileField('Imagenes', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas')])
     is_new = BooleanField('Novedad')
     is_trending = BooleanField('Tendencia')
     is_featured = BooleanField('Destacado')
     is_active = BooleanField('Activo', default=True)
     submit = SubmitField('Guardar')
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.category.choices = [
             (c.id, c.name) for c in Category.query.filter_by(is_active=True).order_by(Category.name).all()
         ]
 
-
 class UserForm(FlaskForm):
-    """Formulario de usuario/administrador"""
-    name = StringField('Nombre completo', validators=[
-        DataRequired(), Length(max=128)
-    ])
-    username = StringField('Usuario', validators=[
-        DataRequired(), Length(min=3, max=64)
-    ])
-    password = PasswordField('Contraseña', validators=[Optional(), Length(min=6)])
-    password2 = PasswordField('Confirmar Contraseña', validators=[
-        Optional(), EqualTo('password', 'Las contraseñas no coinciden')
-    ])
-    is_superadmin = SelectField('Rol', choices=[
-        ('0', 'Administrador'),
-        ('1', 'Super Administrador')
-    ])
-    profile_image = FileField('Foto de perfil', validators=[
-        FileAllowed(ALLOWED_EXTENSIONS, 'Solo imágenes permitidas'), Optional()
-    ])
+    name = StringField('Nombre completo', validators=[DataRequired(), Length(max=128)])
+    username = StringField('Usuario', validators=[DataRequired(), Length(min=3, max=64)])
+    password = PasswordField('Contrasena', validators=[Optional(), Length(min=6)])
+    password2 = PasswordField('Confirmar Contrasena', validators=[Optional(), EqualTo('password', 'Las contrasenas no coinciden')])
+    is_superadmin = SelectField('Rol', choices=[('0', 'Administrador'), ('1', 'Super Administrador')])
+    profile_image = FileField('Foto de perfil', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas'), Optional()])
     submit = SubmitField('Guardar')
 
-
 class ProfileForm(FlaskForm):
-    """Formulario de edición de perfil"""
-    name = StringField('Nombre completo', validators=[
-        DataRequired(), Length(max=128)
-    ])
-    username = StringField('Usuario', validators=[
-        DataRequired(), Length(min=3, max=64)
-    ])
-    password = PasswordField('Nueva Contraseña', validators=[Optional(), Length(min=6)])
-    password2 = PasswordField('Confirmar Contraseña', validators=[
-        Optional(), EqualTo('password', 'Las contraseñas no coinciden')
-    ])
-    profile_image = FileField('Foto de perfil', validators=[
-        FileAllowed(ALLOWED_EXTENSIONS, 'Solo imágenes permitidas'), Optional()
-    ])
+    name = StringField('Nombre completo', validators=[DataRequired(), Length(max=128)])
+    username = StringField('Usuario', validators=[DataRequired(), Length(min=3, max=64)])
+    password = PasswordField('Nueva Contrasena', validators=[Optional(), Length(min=6)])
+    password2 = PasswordField('Confirmar Contrasena', validators=[Optional(), EqualTo('password', 'Las contrasenas no coinciden')])
+    profile_image = FileField('Foto de perfil', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas'), Optional()])
     submit = SubmitField('Guardar cambios')
 
-
 class ThemeForm(FlaskForm):
-    """Formulario de tema"""
     name = StringField('Nombre', validators=[DataRequired(), Length(max=50)])
     primary = StringField('Color Primario', validators=[DataRequired(), HEX_COLOR])
     secondary = StringField('Color Secundario', validators=[DataRequired(), HEX_COLOR])
     accent = StringField('Color Acento', validators=[DataRequired(), HEX_COLOR])
     text_color = StringField('Color Texto', validators=[DataRequired(), HEX_COLOR])
     bg_color = StringField('Color Fondo', validators=[DataRequired(), HEX_COLOR])
-    success = StringField('Color Éxito', validators=[DataRequired(), HEX_COLOR])
+    success = StringField('Color Exito', validators=[DataRequired(), HEX_COLOR])
     error = StringField('Color Error', validators=[DataRequired(), HEX_COLOR])
     is_default = BooleanField('Tema por defecto')
     submit = SubmitField('Guardar')
 
-
 class ContactForm(FlaskForm):
-    """Formulario de información de contacto"""
     whatsapp = StringField('WhatsApp', validators=[Optional(), Length(max=20)])
-    phone = StringField('Teléfono', validators=[Optional(), Length(max=20)])
+    phone = StringField('Telefono', validators=[Optional(), Length(max=20)])
     email = StringField('Email', validators=[Optional(), Length(max=128)])
     tiktok = StringField('TikTok', validators=[Optional(), Length(max=128)])
     facebook = StringField('Facebook', validators=[Optional(), Length(max=256)])
     instagram = StringField('Instagram', validators=[Optional(), Length(max=128)])
     youtube = StringField('YouTube', validators=[Optional(), Length(max=256)])
     telegram = StringField('Telegram', validators=[Optional(), Length(max=128)])
-    address = StringField('Dirección', validators=[Optional(), Length(max=256)])
+    address = StringField('Direccion', validators=[Optional(), Length(max=256)])
     city = StringField('Ciudad', validators=[Optional(), Length(max=100)])
     schedule = StringField('Horario', validators=[Optional(), Length(max=256)])
     submit = SubmitField('Guardar')
 
+class SiteSettingsForm(FlaskForm):
+    site_name = StringField('Nombre del Sitio', validators=[DataRequired(), Length(max=100)])
+    tagline = StringField('Lema', validators=[Optional(), Length(max=200)])
+    exchange_rate = FloatField('Tipo de Cambio (BS a USD)', validators=[DataRequired(), NumberRange(min=0.1, message='El tipo de cambio debe ser positivo')])
+    show_prices = BooleanField('Mostrar Precios')
+    maintenance_mode = BooleanField('Modo Mantenimiento')
+    qr_image = FileField('QR de pago', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas'), Optional()])
+    submit = SubmitField('Guardar Configuracion')
 
-# ═══════════════════════════════════════════════════════════════════════════
+class CustomOrderForm(FlaskForm):
+    client_id = SelectField('Cliente', coerce=int, validators=[InputRequired()])
+    new_client_name = StringField('Nombre de cliente', validators=[Optional(), Length(max=128)])
+    new_client_phone = StringField('Telefono', validators=[Optional(), Length(max=32)])
+    garment_type = SelectField('Tipo de prenda', choices=[(t, t) for t in CUSTOM_ORDER_TYPES], validators=[DataRequired()])
+    delivery_date = DateField('Fecha de entrega', validators=[DataRequired(message='Requerido')], format='%Y-%m-%d')
+    deposit = FloatField('Monto de adelanto', validators=[Optional(), NumberRange(min=0)])
+    total = FloatField('Total', validators=[DataRequired(), NumberRange(min=0)])
+    observations = TextAreaField('Observaciones', validators=[Optional()])
+    reference_from_garment = BooleanField('Prenda de referencia')
+    reference_notes = TextAreaField('Detalle de prenda de referencia', validators=[Optional(), Length(max=300)])
+    is_urgent = BooleanField('Urgente')
+    status = SelectField(
+        'Estado',
+        choices=[(s, CUSTOM_ORDER_STATUS_LABELS.get(s, s.title())) for s in CUSTOM_ORDER_STATUSES],
+        validators=[DataRequired()]
+    )
+    images = MultipleFileField('Imagenes', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas')])
+    largo_espalda = StringField('Largo Espalda', validators=[Optional(), Length(max=50)])
+    largo_delantero = StringField('Largo Delantero', validators=[Optional(), Length(max=50)])
+    cintura = StringField('Cintura', validators=[Optional(), Length(max=50)])
+    busto = StringField('Busto', validators=[Optional(), Length(max=50)])
+    media_cintura = StringField('Media Cintura', validators=[Optional(), Length(max=50)])
+    sisa = StringField('Sisa', validators=[Optional(), Length(max=50)])
+    escote = StringField('Escote', validators=[Optional(), Length(max=50)])
+    largo_manga = StringField('Largo Manga', validators=[Optional(), Length(max=50)])
+    puno = StringField('Puno', validators=[Optional(), Length(max=50)])
+    cuello = StringField('Cuello', validators=[Optional(), Length(max=50)])
+    abertura = StringField('Abertura', validators=[Optional(), Length(max=50)])
+    ancho_espalda = StringField('Ancho Espalda', validators=[Optional(), Length(max=50)])
+    figura = StringField('Figura', validators=[Optional(), Length(max=50)])
+    alforza = StringField('Alforza', validators=[Optional(), Length(max=50)])
+    panos = StringField('Panos', validators=[Optional(), Length(max=50)])
+    wato = StringField('Wato', validators=[Optional(), Length(max=50)])
+    corridas = StringField('Corridas', validators=[Optional(), Length(max=50)])
+    color = StringField('Color', validators=[Optional(), Length(max=50)])
+    cadera = StringField('Cadera', validators=[Optional(), Length(max=50)])
+    talla = StringField('Talla', validators=[Optional(), Length(max=50)])
+    quebrado = StringField('Quebrado', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Guardar pedido')
+    items_json = HiddenField('Items')
+
+
+class CustomOrderItemForm(FlaskForm):
+    garment_type = SelectField('Tipo de prenda', choices=[(t, t) for t in CUSTOM_ORDER_TYPES], validators=[DataRequired()])
+    observations = TextAreaField('Observaciones', validators=[Optional()])
+    reference_from_garment = BooleanField('Prenda de referencia')
+    reference_notes = TextAreaField('Detalle de prenda de referencia', validators=[Optional(), Length(max=300)])
+    largo_espalda = StringField('Largo Espalda', validators=[Optional(), Length(max=50)])
+    largo_delantero = StringField('Largo Delantero', validators=[Optional(), Length(max=50)])
+    cintura = StringField('Cintura', validators=[Optional(), Length(max=50)])
+    busto = StringField('Busto', validators=[Optional(), Length(max=50)])
+    media_cintura = StringField('Media Cintura', validators=[Optional(), Length(max=50)])
+    sisa = StringField('Sisa', validators=[Optional(), Length(max=50)])
+    escote = StringField('Escote', validators=[Optional(), Length(max=50)])
+    largo_manga = StringField('Largo Manga', validators=[Optional(), Length(max=50)])
+    puno = StringField('Puno', validators=[Optional(), Length(max=50)])
+    cuello = StringField('Cuello', validators=[Optional(), Length(max=50)])
+    abertura = StringField('Abertura', validators=[Optional(), Length(max=50)])
+    ancho_espalda = StringField('Ancho Espalda', validators=[Optional(), Length(max=50)])
+    figura = StringField('Figura', validators=[Optional(), Length(max=50)])
+    alforza = StringField('Alforza', validators=[Optional(), Length(max=50)])
+    panos = StringField('Panos', validators=[Optional(), Length(max=50)])
+    wato = StringField('Wato', validators=[Optional(), Length(max=50)])
+    corridas = StringField('Corridas', validators=[Optional(), Length(max=50)])
+    color = StringField('Color', validators=[Optional(), Length(max=50)])
+    cadera = StringField('Cadera', validators=[Optional(), Length(max=50)])
+    talla = StringField('Talla', validators=[Optional(), Length(max=50)])
+    quebrado = StringField('Quebrado', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Agregar prenda')
+
+class ClientForm(FlaskForm):
+    name = StringField('Nombre', validators=[DataRequired(), Length(max=128)])
+    phone = StringField('Telefono', validators=[DataRequired(), Length(max=32)])
+    garment_type = SelectField('Tipo de prenda', choices=[(t, t) for t in CUSTOM_ORDER_TYPES])
+    largo_espalda = StringField('Largo Espalda', validators=[Optional(), Length(max=50)])
+    largo_delantero = StringField('Largo Delantero', validators=[Optional(), Length(max=50)])
+    cintura = StringField('Cintura', validators=[Optional(), Length(max=50)])
+    busto = StringField('Busto', validators=[Optional(), Length(max=50)])
+    media_cintura = StringField('Media Cintura', validators=[Optional(), Length(max=50)])
+    sisa = StringField('Sisa', validators=[Optional(), Length(max=50)])
+    escote = StringField('Escote', validators=[Optional(), Length(max=50)])
+    largo_manga = StringField('Largo Manga', validators=[Optional(), Length(max=50)])
+    puno = StringField('Puno', validators=[Optional(), Length(max=50)])
+    cuello = StringField('Cuello', validators=[Optional(), Length(max=50)])
+    abertura = StringField('Abertura', validators=[Optional(), Length(max=50)])
+    ancho_espalda = StringField('Ancho Espalda', validators=[Optional(), Length(max=50)])
+    figura = StringField('Figura', validators=[Optional(), Length(max=50)])
+    alforza = StringField('Alforza', validators=[Optional(), Length(max=50)])
+    panos = StringField('Panos', validators=[Optional(), Length(max=50)])
+    wato = StringField('Wato', validators=[Optional(), Length(max=50)])
+    corridas = StringField('Corridas', validators=[Optional(), Length(max=50)])
+    color = StringField('Color', validators=[Optional(), Length(max=50)])
+    cadera = StringField('Cadera', validators=[Optional(), Length(max=50)])
+    talla = StringField('Talla', validators=[Optional(), Length(max=50)])
+    quebrado = StringField('Quebrado', validators=[Optional(), Length(max=50)])
+    submit = SubmitField('Guardar cliente')
+
+# -------------------------------------------------
 #                        FUNCIONES AUXILIARES
-# ═══════════════════════════════════════════════════════════════════════════
+# -------------------------------------------------
 
 def slugify(text):
-    """Genera un slug URL-friendly a partir de texto"""
     text = re.sub(r'[^\w\s-]', '', text, flags=re.UNICODE).strip().lower()
     return re.sub(r'[\s_-]+', '-', text)
 
-
 def allowed_file(filename):
-    """Verifica si el archivo tiene una extensión permitida"""
-    return '.' in filename and \
-           filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def save_image(file, folder, prefix=''):
-    """Guarda una imagen y retorna el nombre del archivo"""
     if file and file.filename and allowed_file(file.filename):
         ext = os.path.splitext(file.filename)[1].lower()
         timestamp = datetime.utcnow().strftime('%Y%m%d%H%M%S%f')
-        filename = f"{prefix}{timestamp}{ext}"
-        filename = secure_filename(filename)
+        filename = secure_filename(f"{prefix}{timestamp}{ext}")
         filepath = os.path.join(folder, filename)
         file.save(filepath)
         return filename
     return None
 
-
 def create_notification(message, admin_name, type='info'):
-    """Crea una notificación en el sistema"""
     notif = Notification(message=message, admin_name=admin_name, type=type)
     db.session.add(notif)
     db.session.commit()
 
+def delete_product_assets(product):
+    for img in product.images.all():
+        img_path = os.path.join(UPLOAD_FOLDER, img.filename)
+        if os.path.exists(img_path):
+            os.remove(img_path)
+    folder_name = f"{slugify(product.name)}_{product.id}"
+    product_folder = os.path.join(UPLOAD_FOLDER, folder_name)
+    if os.path.isdir(product_folder):
+        try:
+            for root, dirs, files in os.walk(product_folder, topdown=False):
+                for f in files:
+                    try:
+                        os.remove(os.path.join(root, f))
+                    except OSError:
+                        pass
+                for d in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, d))
+                    except OSError:
+                        pass
+            os.rmdir(product_folder)
+        except OSError:
+            pass
 
-# ═══════════════════════════════════════════════════════════════════════════
-#                           DECORADORES
-# ═══════════════════════════════════════════════════════════════════════════
+def delete_custom_order_assets(order):
+    folder_name = f"custom_{order.code}_{order.id}"
+    order_folder = os.path.join(CUSTOM_ORDER_FOLDER, folder_name)
+    for img in order.images.all():
+        img_path = os.path.join(CUSTOM_ORDER_FOLDER, img.filename)
+        if os.path.exists(img_path):
+            os.remove(img_path)
+    if os.path.isdir(order_folder):
+        try:
+            for root, dirs, files in os.walk(order_folder, topdown=False):
+                for f in files:
+                    try:
+                        os.remove(os.path.join(root, f))
+                    except OSError:
+                        pass
+                for d in dirs:
+                    try:
+                        os.rmdir(os.path.join(root, d))
+                    except OSError:
+                        pass
+            os.rmdir(order_folder)
+        except OSError:
+            pass
+
+def save_custom_order_images(files, order):
+    folder_name = f"custom_{order.code}_{order.id}"
+    order_folder = os.path.join(CUSTOM_ORDER_FOLDER, folder_name)
+    os.makedirs(order_folder, exist_ok=True)
+    saved = []
+    for f in files:
+        if f and f.filename and allowed_file(f.filename):
+            filename = save_image(f, order_folder, f'pc_{order.id}_')
+            if filename:
+                rel = os.path.join(folder_name, filename).replace('\\','/')
+                saved.append(rel)
+    return saved
+
+def extract_measurements_from_form(form):
+    fields = ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado']
+    data = {}
+    for f in fields:
+        val = getattr(form, f).data if hasattr(form, f) else None
+        if val:
+            data[f] = val
+    return data
+
+def extract_reference_from_form(form):
+    """Extra metadata cuando el cliente deja una prenda como referencia."""
+    data = {}
+    if hasattr(form, 'reference_from_garment') and form.reference_from_garment.data:
+        data['referencia_prenda'] = 'Si'
+        note = getattr(form, 'reference_notes', None)
+        if note and note.data:
+            data['nota_referencia'] = note.data
+    return data
+
+
+def append_custom_order_history(order, new_status, note='', user=None):
+    """Agrega una entrada de historial dentro del JSON de medidas/meta."""
+    data = order.measurements or {}
+    history = data.get('_history', [])
+    # Hora local Bolivia (UTC-4)
+    now = datetime.utcnow() - timedelta(hours=4)
+    history.append({
+        'fecha': now.strftime('%Y-%m-%d %H:%M:%S (GMT-4)'),
+        'fecha_iso': now.isoformat(),
+        'estado': new_status,
+        'nota': note or '',
+        'usuario': user or (current_user.username if current_user and current_user.is_authenticated else 'sistema')
+    })
+    data['_history'] = history
+    order.measurements = data
+    # Asegurar que SQLAlchemy marque el cambio en JSON
+    try:
+        flag_modified(order, 'measurements')
+    except Exception:
+        pass
+
+
+def get_custom_order_history(order):
+    data = order.measurements or {}
+    return data.get('_history', [])
+
+def generate_order_code():
+    year = datetime.utcnow().year
+    rand = random.randint(0, 999999)
+    return f"MP-{year}-{rand:06d}"
+
+def generate_custom_order_code():
+    year = datetime.utcnow().year
+    rand = random.randint(0, 999999)
+    return f"PC-{year}-{rand:06d}"
+
+def append_history(order, status, note=None):
+    history = order.history or []
+    history.append({'status': status, 'note': note, 'timestamp': datetime.utcnow().isoformat()})
+    order.history = history
+
 
 def superadmin_required(f):
-    """Decorador que requiere permisos de superadministrador"""
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if not current_user.is_authenticated or not current_user.is_superadmin:
-            flash('No tienes permisos para acceder a esta sección.', 'danger')
+            flash('No tienes permisos para acceder a esta seccion.', 'danger')
             abort(403)
         return f(*args, **kwargs)
     return decorated_function
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#                       CONTEXT PROCESSORS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @login_manager.user_loader
@@ -433,6 +745,9 @@ def load_user(user_id):
 @app.context_processor
 def inject_globals():
     """Inyecta variables globales en todos los templates"""
+    settings = SiteSettings.query.first()
+    exchange_rate = settings.exchange_rate if settings and settings.exchange_rate else app.config.get('PAYPAL_RATE', 6.96)
+
     # Tema activo
     active_theme = Theme.query.filter_by(is_default=True).first()
     if not active_theme:
@@ -453,11 +768,20 @@ def inject_globals():
     
     return {
         'active_theme': active_theme,
+        'site_settings': settings,
         'public_categories': categories,
         'contact_info': contact,
         'notifications': notifications,
         'current_year': datetime.utcnow().year,
-        'slugify': slugify
+        'slugify': slugify,
+        'paypal_client_id': app.config.get('PAYPAL_CLIENT_ID'),
+        'paypal_rate': exchange_rate,
+        'paypal_percent_fee': app.config.get('PAYPAL_PERCENT_FEE', 0),
+        'paypal_fixed_fee': app.config.get('PAYPAL_FIXED_FEE', 0),
+        'GARMENT_FIELDS': GARMENT_FIELDS,
+        'CUSTOM_ORDER_TYPES': CUSTOM_ORDER_TYPES,
+        'CUSTOM_ORDER_STATUS_LABELS': CUSTOM_ORDER_STATUS_LABELS,
+        'getattr': getattr
     }
 
 
@@ -625,6 +949,313 @@ def quienes_somos():
 def contacto():
     """Página de Contacto"""
     return render_template('public/contacto.html')
+
+
+@app.route('/rastrear-pedido', methods=['GET', 'POST'])
+def rastrear_pedido():
+    """Página pública para rastrear pedidos"""
+    code = (request.args.get('code') or request.form.get('code') or '').strip().upper()
+    pedido = None
+    if code:
+        pedido = Order.query.filter_by(order_code=code).first()
+        if not pedido:
+            flash('No se encontró un pedido con ese código.', 'warning')
+    return render_template('public/rastrear_pedido.html', pedido=pedido, code=code, statuses=ORDER_STATUSES)
+
+
+@app.route('/pedido/<order_code>')
+def pedido_confirmado(order_code):
+    """Página de confirmación de pedido"""
+    pedido = Order.query.filter_by(order_code=order_code.upper()).first_or_404()
+    return render_template('public/pedido_confirmado.html', pedido=pedido)
+
+
+@app.route('/api/pedidos/<order_code>')
+def api_pedido(order_code):
+    """Endpoint de rastreo en JSON"""
+    pedido = Order.query.filter_by(order_code=order_code.upper()).first_or_404()
+    return jsonify({
+        'order_code': pedido.order_code,
+        'product': pedido.product.name if pedido.product else '',
+        'image_url': pedido.image_url,
+        'payment_method': pedido.payment_method,
+        'total': pedido.total,
+        'status': pedido.status,
+        'history': pedido.history or [],
+        'created_at': pedido.created_at.isoformat()
+    })
+
+
+# -------------------------------------------------
+#                 CHECKOUT / ORDERS
+# -------------------------------------------------
+
+
+def paypal_api_base():
+    """Devuelve la URL base de PayPal segun entorno."""
+    env = (app.config.get('PAYPAL_ENVIRONMENT') or 'sandbox').lower()
+    return 'https://api-m.paypal.com' if env in ('live', 'production') else 'https://api-m.sandbox.paypal.com'
+
+
+def compute_paypal_total_usd(bs_amount):
+    """Calcula el monto en USD incluyendo comision de PayPal."""
+    # Obtener tasa de cambio de la BD
+    settings = SiteSettings.query.first()
+    rate = settings.exchange_rate if settings and settings.exchange_rate else 6.96
+    
+    percent = float(app.config.get('PAYPAL_PERCENT_FEE') or 0)
+    fixed = float(app.config.get('PAYPAL_FIXED_FEE') or 0)
+    
+    if rate <= 0:
+        rate = 6.96
+        
+    net = bs_amount / rate
+    denominator = (1 - percent) if percent < 1 else 1
+    gross = (net + fixed) / denominator
+    return round(gross, 2)
+
+
+
+
+def extract_measurements_from_form(form):
+    """Construye un diccionario de medidas desde el formulario"""
+    fields = [
+        'largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote',
+        'largo_manga','puno','cuello','abertura','ancho_espalda','figura',
+        'alforza','panos','wato','corridas','color','cadera','talla','quebrado'
+    ]
+    data = {}
+    for f in fields:
+        val = getattr(form, f).data if hasattr(form, f) else None
+        if val:
+            data[f] = val
+    return data
+
+def paypal_get_token():
+    """Obtiene token OAuth de PayPal."""
+    client_id = app.config.get('PAYPAL_CLIENT_ID')
+    secret = app.config.get('PAYPAL_SECRET')
+    if not client_id or not secret:
+        abort(500, description='Faltan credenciales de PayPal')
+    try:
+        resp = requests.post(
+            f"{paypal_api_base()}/v1/oauth2/token",
+            data={'grant_type': 'client_credentials'},
+            auth=(client_id, secret),
+            timeout=10
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data.get('access_token')
+    except requests.RequestException as exc:
+        app.logger.exception('Error obteniendo token de PayPal: %s', exc)
+        abort(502, description='No se pudo conectar con PayPal')
+
+
+def paypal_create_order(amount_usd, product):
+    """Crea una orden de PayPal y devuelve su payload."""
+    token = paypal_get_token()
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    payload = {
+        'intent': 'CAPTURE',
+        'purchase_units': [{
+            'amount': {
+                'currency_code': 'USD',
+                'value': f"{amount_usd:.2f}"
+            },
+            'custom_id': str(product.id),
+            'description': product.name[:127] if product and product.name else 'Pedido Modas Pathy'
+        }],
+        'application_context': {
+            'brand_name': app.config.get('STORE_NAME', 'Modas Pathy'),
+            'shipping_preference': 'NO_SHIPPING',
+            'user_action': 'PAY_NOW'
+        }
+    }
+    try:
+        resp = requests.post(
+            f"{paypal_api_base()}/v2/checkout/orders",
+            json=payload,
+            headers=headers,
+            timeout=10
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as exc:
+        app.logger.exception('Error creando orden PayPal: %s', exc)
+        abort(502, description='No se pudo crear la orden en PayPal')
+
+
+def paypal_capture_order(order_id):
+    """Captura una orden PayPal existente."""
+    token = paypal_get_token()
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Content-Type': 'application/json'
+    }
+    try:
+        resp = requests.post(
+            f"{paypal_api_base()}/v2/checkout/orders/{order_id}/capture",
+            headers=headers,
+            timeout=10
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as exc:
+        app.logger.exception('Error capturando orden PayPal %s: %s', order_id, exc)
+        abort(502, description='No se pudo capturar el pago en PayPal')
+
+
+def _create_order(product_id, image_url, payment_method, total=None, customer_name=None, customer_phone=None, order_notes=None):
+    """Crea y persiste un pedido"""
+    product = Product.query.get_or_404(product_id)
+    code = generate_order_code()
+    while Order.query.filter_by(order_code=code).first():
+        code = generate_order_code()
+    order = Order(
+        order_code=code,
+        product_id=product.id,
+        image_url=image_url,
+        payment_method=payment_method,
+        total=total or product.price,
+        status='Pagado' if payment_method == 'paypal' else 'Recibido',
+        customer_name=customer_name,
+        customer_phone=customer_phone,
+        order_notes=order_notes
+    )
+    append_history(order, order.status, note=f'Creado via {payment_method}')
+    db.session.add(order)
+    db.session.commit()
+    return order
+
+
+@app.route('/api/checkout/paypal', methods=['POST'])
+def checkout_paypal():
+    """Crea una orden PayPal (sin generar pedido hasta capturar)."""
+    data = request.get_json(force=True, silent=True) or {}
+    product_id = data.get('product_id')
+    image_url = (data.get('image_url') or '').strip()
+    order_notes = (data.get('order_notes') or '').strip()
+    
+    try:
+        product_id = int(product_id)
+    except (TypeError, ValueError):
+        abort(400, description='Producto invalido')
+    
+    product = Product.query.get_or_404(product_id)
+    bs_total = product.price
+    usd_total = compute_paypal_total_usd(bs_total)
+    
+    order_payload = paypal_create_order(usd_total, product)
+    order_id = order_payload.get('id')
+    if not order_id:
+        abort(502, description='PayPal no devolvio ID de orden')
+    
+    return jsonify({
+        'order_id': order_id,
+        'amount_usd': usd_total,
+        'order_notes': order_notes
+    })
+
+
+@app.route('/api/checkout/paypal/capture', methods=['POST'])
+def checkout_paypal_capture():
+    """Captura el pago de PayPal y genera el pedido."""
+    data = request.get_json(force=True, silent=True) or {}
+    order_id = data.get('order_id')
+    image_url = (data.get('image_url') or '').strip()
+    order_notes = (data.get('order_notes') or '').strip()
+    
+    if not order_id:
+        abort(400, description='Falta el ID de orden de PayPal')
+    
+    capture_data = paypal_capture_order(order_id)
+    
+    if capture_data.get('status') != 'COMPLETED':
+        abort(400, description='El pago no se completo en PayPal')
+    
+    purchase_units = capture_data.get('purchase_units') or []
+    product_id = None
+    capture_id = None
+    
+    if purchase_units:
+        custom_id = purchase_units[0].get('custom_id')
+        try:
+            product_id = int(custom_id)
+        except (TypeError, ValueError):
+            product_id = None
+        
+        payments = purchase_units[0].get('payments') or {}
+        captures = payments.get('captures') or []
+        if captures:
+            capture_id = captures[0].get('id')
+    
+    if not product_id:
+        abort(400, description='No se pudo asociar el producto al pago')
+    
+    product = Product.query.get_or_404(product_id)
+    order = _create_order(product.id, image_url, 'paypal', total=product.price, order_notes=order_notes)
+    note = f'Pago PayPal confirmado (capture {capture_id})' if capture_id else 'Pago PayPal confirmado'
+    append_history(order, 'Pagado', note=note)
+    db.session.commit()
+    
+    return jsonify({
+        'order_code': order.order_code,
+        'redirect_url': url_for('pedido_confirmado', order_code=order.order_code)
+    })
+
+
+@app.route('/api/checkout/whatsapp', methods=['POST'])
+def checkout_whatsapp():
+    """Genera pedido iniciado por WhatsApp"""
+    data = request.get_json(force=True, silent=True) or {}
+    product_id = data.get('product_id')
+    image_url = (data.get('image_url') or '').strip()
+    order_notes = (data.get('order_notes') or '').strip()
+    try:
+        total = float(data.get('total')) if data.get('total') is not None else None
+    except (TypeError, ValueError):
+        total = None
+    
+    try:
+        product_id = int(product_id)
+    except (TypeError, ValueError):
+        abort(400, description='Producto inválido')
+    
+    order = _create_order(product_id, image_url, 'whatsapp', total=total, order_notes=order_notes)
+    
+    return jsonify({
+        'order_code': order.order_code,
+        'redirect_url': url_for('pedido_confirmado', order_code=order.order_code)
+    })
+
+
+@app.route('/api/checkout/qr', methods=['POST'])
+def checkout_qr():
+    """Genera pedido iniciado por QR"""
+    data = request.get_json(force=True, silent=True) or {}
+    product_id = data.get('product_id')
+    image_url = (data.get('image_url') or '').strip()
+    order_notes = (data.get('order_notes') or '').strip()
+    try:
+        total = float(data.get('total')) if data.get('total') is not None else None
+    except (TypeError, ValueError):
+        total = None
+    
+    try:
+        product_id = int(product_id)
+    except (TypeError, ValueError):
+        abort(400, description='Producto invalido')
+    
+    order = _create_order(product_id, image_url, 'qr', total=total, order_notes=order_notes)
+    
+    return jsonify({
+        'order_code': order.order_code,
+        'redirect_url': url_for('pedido_confirmado', order_code=order.order_code)
+    })
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -859,12 +1490,15 @@ def admin_producto_nuevo():
     form = ProductForm()
     
     if form.validate_on_submit():
+        promo_text = (form.promo_text.data or '').strip()
         producto = Product(
             name=form.name.data,
             slug=slugify(form.name.data),
             description=form.description.data,
             price=form.price.data,
             original_price=form.original_price.data,
+            is_on_sale=form.is_on_sale.data,
+            promo_text=promo_text or None,
             category_id=form.category.data,
             is_new=form.is_new.data,
             is_trending=form.is_trending.data,
@@ -911,11 +1545,14 @@ def admin_producto_editar(id):
     form = ProductForm(obj=producto)
     
     if form.validate_on_submit():
+        promo_text = (form.promo_text.data or '').strip()
         producto.name = form.name.data
         producto.slug = slugify(form.name.data)
         producto.description = form.description.data
         producto.price = form.price.data
         producto.original_price = form.original_price.data
+        producto.is_on_sale = form.is_on_sale.data
+        producto.promo_text = promo_text or None
         producto.category_id = form.category.data
         producto.is_new = form.is_new.data
         producto.is_trending = form.is_trending.data
@@ -983,20 +1620,12 @@ def admin_producto_eliminar(id):
     producto = Product.query.get_or_404(id)
     nombre = producto.name
     
-    # Eliminar imágenes
-    for img in producto.images.all():
-        img_path = os.path.join(UPLOAD_FOLDER, img.filename)
-        if os.path.exists(img_path):
-            os.remove(img_path)
+    # Eliminar pedidos relacionados
+    for pedido in Order.query.filter_by(product_id=producto.id).all():
+        db.session.delete(pedido)
     
-    # Intentar eliminar carpeta
-    folder_name = f"{slugify(producto.name)}_{producto.id}"
-    product_folder = os.path.join(UPLOAD_FOLDER, folder_name)
-    if os.path.exists(product_folder):
-        try:
-            os.rmdir(product_folder)
-        except OSError:
-            pass
+    # Eliminar imágenes y carpeta
+    delete_product_assets(producto)
     
     db.session.delete(producto)
     db.session.commit()
@@ -1290,8 +1919,507 @@ def admin_contactos():
     return render_template('admin/contactos.html', form=form)
 
 
+@app.route('/admin/configuracion', methods=['GET', 'POST'])
+@login_required
+@superadmin_required
+def admin_settings():
+    """Gestión de configuración del sitio"""
+    settings = SiteSettings.query.first()
+    if not settings:
+        settings = SiteSettings()
+        db.session.add(settings)
+        db.session.commit()
+    
+    form = SiteSettingsForm(obj=settings)
+    
+    if form.validate_on_submit():
+        settings.site_name = form.site_name.data
+        settings.tagline = form.tagline.data
+        settings.exchange_rate = form.exchange_rate.data
+        settings.show_prices = form.show_prices.data
+        settings.maintenance_mode = form.maintenance_mode.data
+        
+        if form.qr_image.data:
+            if settings.qr_image:
+                old_path = os.path.join(QR_FOLDER, settings.qr_image)
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            filename = save_image(form.qr_image.data, QR_FOLDER, 'qr_')
+            if filename:
+                settings.qr_image = filename
+        
+        db.session.commit()
+        flash('Configuración actualizada correctamente.', 'success')
+        return redirect(url_for('admin_settings'))
+    
+    return render_template('admin/settings.html', form=form, settings=settings)
+
+
+# -------------------------------------------------
+#                        PEDIDOS
+# -------------------------------------------------
+
+
+@app.route('/admin/pedidos')
+@login_required
+def admin_pedidos():
+    """Listado de pedidos"""
+    pedidos = Order.query.order_by(Order.created_at.desc()).all()
+    return render_template('admin/pedidos.html', pedidos=pedidos, statuses=ORDER_STATUSES)
+
+
+@app.route('/admin/pedidos/<int:order_id>/estado', methods=['POST'])
+@login_required
+def admin_pedido_estado(order_id):
+    """Actualiza el estado de un pedido"""
+    pedido = Order.query.get_or_404(order_id)
+    new_status = request.form.get('status')
+    if new_status and new_status in ORDER_STATUSES:
+        pedido.status = new_status
+        append_history(pedido, new_status, note=f'Actualizado por {current_user.username}')
+        db.session.commit()
+        flash('Estado actualizado correctamente.', 'success')
+    else:
+        flash('Estado inválido.', 'warning')
+    return redirect(request.referrer or url_for('admin_pedidos'))
+
+
+@app.route('/admin/pedidos/eliminar/<int:order_id>', methods=['POST'])
+@login_required
+def admin_pedido_eliminar(order_id):
+    """Eliminar pedido individual"""
+    pedido = Order.query.get_or_404(order_id)
+    code = pedido.order_code
+    db.session.delete(pedido)
+    db.session.commit()
+    flash(f'Pedido {code} eliminado.', 'warning')
+    return redirect(request.referrer or url_for('admin_pedidos'))
+
+
 # ═══════════════════════════════════════════════════════════════════════════
+#                       # -------------------------------------------------
+#              PEDIDOS PERSONALIZADOS
+# -------------------------------------------------
+
+
+def _custom_order_client_choices():
+    choices = [(0, 'Nuevo cliente')]
+    for c in Client.query.order_by(Client.name).all():
+        label = f"{c.name} ({c.phone})"
+        choices.append((c.id, label))
+    return choices
+
+
+@app.route('/admin/pedidos-personalizados')
+@login_required
+def admin_custom_orders():
+    """Listado de pedidos personalizados"""
+    page = request.args.get('page', 1, type=int)
+    client_id = request.args.get('cliente', type=int)
+    garment = request.args.get('tipo', '', type=str)
+    estado = request.args.get('estado', '', type=str)
+    urgente = request.args.get('urgente', type=str)
+
+    query = CustomOrder.query.join(Client)
+    if client_id:
+        query = query.filter(CustomOrder.client_id == client_id)
+    if garment:
+        query = query.filter(CustomOrder.garment_type == garment)
+    if estado:
+        query = query.filter(CustomOrder.status == estado)
+    if urgente == '1':
+        query = query.filter(CustomOrder.is_urgent == True)
+
+    pagination = db.paginate(query.order_by(CustomOrder.created_at.desc()), page=page, per_page=15, error_out=False)
+    clients = Client.query.order_by(Client.name).all()
+    today = datetime.utcnow().date()
+    soon_orders = CustomOrder.query.filter(
+        CustomOrder.delivery_date != None
+    ).filter(
+        CustomOrder.delivery_date <= today + timedelta(days=3)
+    ).order_by(CustomOrder.delivery_date.asc()).all()
+    agenda_items = CustomOrder.query.filter(CustomOrder.delivery_date != None).order_by(CustomOrder.delivery_date.asc(), CustomOrder.is_urgent.desc()).limit(100).all()
+    urgentes_count = CustomOrder.query.filter_by(is_urgent=True).count()
+
+    return render_template('admin/custom_orders.html',
+        pedidos=pagination.items,
+        pagination=pagination,
+        clients=clients,
+        tipos=CUSTOM_ORDER_TYPES,
+        estados=CUSTOM_ORDER_STATUSES,
+        estado_labels=CUSTOM_ORDER_STATUS_LABELS,
+        filtro_cliente=client_id,
+        filtro_tipo=garment,
+        filtro_estado=estado,
+        filtro_urgente=urgente,
+        agenda_items=agenda_items,
+        urgentes_count=urgentes_count,
+        now_date=today,
+        soon_orders=soon_orders
+    )
+
+
+@app.route('/admin/pedidos-personalizados/nuevo', methods=['GET', 'POST'])
+@login_required
+def admin_custom_order_nuevo():
+    """Crear pedido personalizado"""
+    form = CustomOrderForm()
+    form.client_id.choices = _custom_order_client_choices()
+    prefill_client = request.args.get('cliente', type=int)
+    if request.method == 'GET':
+        if prefill_client:
+            form.client_id.data = prefill_client
+        elif not form.client_id.data:
+            form.client_id.data = 0
+
+    if form.validate_on_submit():
+        # Validar items en JSON
+        import json
+        raw_items = request.form.get('items_json') or ''
+        try:
+            items_data = json.loads(raw_items) if raw_items else []
+        except Exception:
+            items_data = []
+        if not items_data:
+            flash('Debes agregar al menos una prenda al pedido.', 'warning')
+            return render_template('admin/custom_order_form.html', form=form, nuevo=True)
+        
+        if not form.delivery_date.data:
+            flash('La fecha de entrega es obligatoria.', 'warning')
+            return render_template('admin/custom_order_form.html', form=form, nuevo=True)
+
+        client = None
+        if form.client_id.data and form.client_id.data != 0:
+            client = Client.query.get(form.client_id.data)
+        if not client:
+            if not form.new_client_name.data:
+                flash('Debes seleccionar un cliente o ingresar nombre.', 'warning')
+                return render_template('admin/custom_order_form.html', form=form, nuevo=True)
+            phone_val = (form.new_client_phone.data or '').strip() or 'Sin telefono'
+            client = Client(name=form.new_client_name.data.strip(), phone=phone_val)
+            db.session.add(client)
+            db.session.flush()
+
+        code = generate_custom_order_code()
+        while CustomOrder.query.filter_by(code=code).first():
+            code = generate_custom_order_code()
+
+        first_item = items_data[0]
+        order_measurements = first_item.get('measurements', {})
+        order = CustomOrder(
+            code=code,
+            client_id=client.id,
+            garment_type=first_item.get('garment_type'),
+            delivery_date=form.delivery_date.data,
+            deposit=form.deposit.data,
+            total=form.total.data,
+            observations=form.observations.data,
+            is_urgent=form.is_urgent.data,
+            status=form.status.data,
+            measurements=order_measurements
+        )
+        db.session.add(order)
+        db.session.flush()
+
+        # Crear prendas asociadas
+        for item in items_data:
+            item_obj = CustomOrderItem(
+                order_id=order.id,
+                garment_type=item.get('garment_type'),
+                measurements=item.get('measurements', {})
+            )
+            db.session.add(item_obj)
+            # Guardar medidas en el cliente por cada prenda
+            m = item.get('measurements', {}) or {}
+            if m:
+                client.measurements = client.measurements or {}
+                client.measurements[item.get('garment_type')] = m
+
+        append_custom_order_history(order, form.status.data, 'Estado inicial', user=current_user.username if current_user.is_authenticated else 'sistema')
+        db.session.commit()
+
+        files = request.files.getlist('images')
+        saved = save_custom_order_images(files, order)
+        for rel in saved:
+            db.session.add(CustomOrderImage(filename=rel, order_id=order.id))
+        db.session.commit()
+
+        flash('Pedido personalizado creado correctamente.', 'success')
+        if 'add_another' in request.form:
+            return redirect(url_for('admin_custom_order_nuevo', cliente=client.id))
+        return redirect(url_for('admin_custom_order_detalle', order_id=order.id))
+
+    return render_template('admin/custom_order_form.html', form=form, nuevo=True)
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>')
+@login_required
+def admin_custom_order_detalle(order_id):
+    """Detalle de pedido personalizado"""
+    pedido = CustomOrder.query.get_or_404(order_id)
+    history = get_custom_order_history(pedido)
+    return render_template('admin/custom_order_detail.html', pedido=pedido, history=history)
+
+
+@app.route('/admin/pedidos-personalizados/eliminar/<int:order_id>', methods=['POST'])
+@login_required
+def admin_custom_order_eliminar(order_id):
+    """Eliminar pedido personalizado"""
+    pedido = CustomOrder.query.get_or_404(order_id)
+    delete_custom_order_assets(pedido)
+    code = pedido.code
+    db.session.delete(pedido)
+    db.session.commit()
+    flash(f'Pedido personalizado {code} eliminado.', 'warning')
+    return redirect(url_for('admin_custom_orders'))
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/estado', methods=['POST'])
+@login_required
+def admin_custom_order_estado(order_id):
+    """Actualizar estado del pedido y registrar historial"""
+    pedido = CustomOrder.query.get_or_404(order_id)
+    new_status = request.form.get('status')
+    note = request.form.get('note', '')
+    if new_status not in CUSTOM_ORDER_STATUSES:
+        abort(400, description='Estado no válido')
+    old_status = pedido.status
+    pedido.status = new_status
+    append_custom_order_history(pedido, new_status, note or f'Cambio desde {old_status}', user=current_user.username)
+    db.session.commit()
+    flash(f'Estado actualizado a {CUSTOM_ORDER_STATUS_LABELS.get(new_status, new_status)} para {pedido.code}.', 'success')
+    return redirect(request.referrer or url_for('admin_custom_orders'))
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/items/nuevo', methods=['POST'])
+@login_required
+def admin_custom_order_item_nuevo(order_id):
+    """Agregar una nueva prenda dentro del pedido existente"""
+    pedido = CustomOrder.query.get_or_404(order_id)
+    form = CustomOrderItemForm()
+    form.garment_type.choices = [(t, t) for t in CUSTOM_ORDER_TYPES]
+    if form.validate_on_submit():
+        measures = extract_measurements_from_form(form)
+        ref_data = extract_reference_from_form(form)
+        measures.update(ref_data)
+        item = CustomOrderItem(
+            order_id=pedido.id,
+            garment_type=form.garment_type.data,
+            measurements=measures
+        )
+        db.session.add(item)
+        # Actualizar ultimo tipo/medidas en el cliente para esta prenda
+        cliente = pedido.client
+        if measures:
+            cliente.measurements = cliente.measurements or {}
+            cliente.measurements[form.garment_type.data] = measures
+        medidas_count = len(measures or {})
+        note = f'Prenda agregada: {form.garment_type.data}'
+        if medidas_count:
+            note += f' ({medidas_count} medidas)'
+        append_custom_order_history(pedido, pedido.status, note, user=current_user.username)
+        db.session.commit()
+        flash('Prenda agregada al pedido.', 'success')
+    else:
+        flash('No se pudo agregar la prenda, verifica el formulario.', 'danger')
+    return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/items/<int:item_id>/editar', methods=['POST'])
+@login_required
+def admin_custom_order_item_editar(order_id, item_id):
+    pedido = CustomOrder.query.get_or_404(order_id)
+    item = CustomOrderItem.query.get_or_404(item_id)
+    if item.order_id != pedido.id:
+        abort(404)
+    tipo = request.form.get('garment_type')
+    if not tipo:
+        flash('Tipo de prenda requerido.', 'danger')
+        return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
+    fields = ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado']
+    old_measures = item.measurements or {}
+    measures = {}
+    for f in fields:
+        val = request.form.get(f)
+        if val:
+            measures[f] = val
+    if request.form.get('reference_from_garment'):
+        measures['referencia_prenda'] = 'Si'
+        note = request.form.get('reference_notes')
+        if note:
+            measures['nota_referencia'] = note
+    item.garment_type = tipo
+    item.measurements = measures
+    # Registrar cambios de medidas
+    changes = []
+    keys = set(list(old_measures.keys()) + list(measures.keys()))
+    for k in keys:
+        old_v = old_measures.get(k)
+        new_v = measures.get(k)
+        if old_v != new_v:
+            changes.append(f"{k}: {old_v or '-'} -> {new_v or '-'}")
+    note = f'Prenda editada: {tipo}'
+    if changes:
+        note += ' | Cambios: ' + '; '.join(changes)
+    append_custom_order_history(pedido, pedido.status, note, user=current_user.username)
+    db.session.commit()
+    flash('Prenda actualizada.', 'success')
+    return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/items/<int:item_id>/eliminar', methods=['POST'])
+@login_required
+def admin_custom_order_item_eliminar(order_id, item_id):
+    pedido = CustomOrder.query.get_or_404(order_id)
+    item = CustomOrderItem.query.get_or_404(item_id)
+    if item.order_id != pedido.id:
+        abort(404)
+    db.session.delete(item)
+    append_custom_order_history(pedido, pedido.status, f'Prenda eliminada: {item.garment_type}', user=current_user.username)
+    db.session.commit()
+    flash('Prenda eliminada del pedido.', 'warning')
+    return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/editar', methods=['POST'])
+@login_required
+def admin_custom_order_editar(order_id):
+    pedido = CustomOrder.query.get_or_404(order_id)
+    old_status = pedido.status
+    old_delivery = pedido.delivery_date
+    old_deposit = pedido.deposit
+    old_total = pedido.total
+    old_obs = pedido.observations
+    old_urgent = pedido.is_urgent
+    delivery_date = request.form.get('delivery_date')
+    pedido.delivery_date = datetime.strptime(delivery_date, '%Y-%m-%d').date() if delivery_date else None
+    pedido.deposit = request.form.get('deposit') or None
+    pedido.total = request.form.get('total') or pedido.total
+    pedido.observations = request.form.get('observations')
+    pedido.is_urgent = bool(request.form.get('is_urgent'))
+    new_status = request.form.get('status') or pedido.status
+    pedido.status = new_status
+    changes = []
+    if old_status != new_status:
+        changes.append(f"estado {old_status} -> {new_status}")
+    if old_delivery != pedido.delivery_date:
+        changes.append(f"entrega {old_delivery or '-'} -> {pedido.delivery_date or '-'}")
+    if old_deposit != pedido.deposit:
+        changes.append(f"adelanto {old_deposit or 0} -> {pedido.deposit or 0}")
+    if old_total != pedido.total:
+        changes.append(f"total {old_total or 0} -> {pedido.total or 0}")
+    if old_obs != pedido.observations:
+        changes.append("observaciones actualizadas")
+    if old_urgent != pedido.is_urgent:
+        changes.append(f"urgente {old_urgent} -> {pedido.is_urgent}")
+    note = f'Pedido editado por {current_user.username}'
+    if changes:
+        note += " | " + "; ".join(changes)
+    append_custom_order_history(pedido, new_status, note, user=current_user.username)
+    db.session.commit()
+    flash('Pedido actualizado.', 'success')
+    return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
+
+
+@app.route('/admin/clientes')
+@login_required
+def admin_clientes():
+    """Listado de clientes"""
+    clientes = Client.query.order_by(Client.name).all()
+    return render_template('admin/clientes.html', clientes=clientes)
+
+
+@app.route('/admin/clientes/nuevo', methods=['GET', 'POST'])
+@login_required
+def admin_cliente_nuevo():
+    """Crear cliente y registrar medidas base"""
+    form = ClientForm()
+    form.garment_type.choices = [(t, t) for t in CUSTOM_ORDER_TYPES]
+    if not form.garment_type.data:
+        form.garment_type.data = CUSTOM_ORDER_TYPES[0]
+    if form.validate_on_submit():
+        cliente = Client(name=form.name.data, phone=form.phone.data)
+        medidas = extract_measurements_from_form(form)
+        if medidas:
+            cliente.measurements = {form.garment_type.data: medidas}
+        db.session.add(cliente)
+        db.session.commit()
+        flash('Cliente creado y medidas guardadas.', 'success')
+        return redirect(url_for('admin_clientes'))
+    
+    return render_template('admin/cliente_form.html', form=form, cliente=None, nuevo=True)
+
+
+@app.route('/admin/clientes/<int:id>/editar', methods=['GET', 'POST'])
+@login_required
+def admin_cliente_editar(id):
+    """Editar cliente y medidas"""
+    cliente = Client.query.get_or_404(id)
+    form = ClientForm()
+    form.garment_type.choices = [(t, t) for t in CUSTOM_ORDER_TYPES]
+    if request.method == 'GET':
+        form.name.data = cliente.name
+        form.phone.data = cliente.phone
+        form.garment_type.data = CUSTOM_ORDER_TYPES[0]
+        # Prefill primeras medidas si existen
+        medidas = (cliente.measurements or {}).get(form.garment_type.data, {})
+        for k, v in medidas.items():
+            if hasattr(form, k):
+                getattr(form, k).data = v
+    if form.validate_on_submit():
+        cliente.name = form.name.data
+        cliente.phone = form.phone.data
+        medidas = extract_measurements_from_form(form)
+        cliente.measurements = cliente.measurements or {}
+        if medidas:
+            cliente.measurements[form.garment_type.data] = medidas
+        db.session.commit()
+        flash('Cliente actualizado.', 'success')
+        return redirect(url_for('admin_clientes'))
+    
+    return render_template('admin/cliente_form.html', form=form, cliente=cliente, nuevo=False)
+
+
+@app.route('/api/clientes/buscar')
+@login_required
+def api_clientes_buscar():
+    """Buscar clientes por nombre o telefono"""
+    term = (request.args.get('q') or '').strip()
+    if not term:
+        return jsonify([])
+    like_term = f"%{term}%"
+    results = Client.query.filter(
+        or_(Client.phone.ilike(like_term), Client.name.ilike(like_term))
+    ).order_by(Client.name).limit(8).all()
+    data = [{'id': c.id, 'name': c.name, 'phone': c.phone} for c in results]
+    return jsonify(data)
+
+
+@app.route('/api/clientes/<int:client_id>/medidas', methods=['GET', 'POST'])
+@login_required
+def api_cliente_medidas(client_id):
+    """Obtiene o guarda medidas por cliente"""
+    cliente = Client.query.get_or_404(client_id)
+    if request.method == 'GET':
+        prenda = request.args.get('prenda')
+        data = (cliente.measurements or {}).get(prenda or '', {}) if prenda else (cliente.measurements or {})
+        return jsonify(data)
+    
+    payload = request.get_json(force=True, silent=True) or {}
+    prenda = payload.get('garment_type')
+    medidas = payload.get('measurements') or {}
+    if not prenda:
+        abort(400, description='Falta el tipo de prenda')
+    cliente.measurements = cliente.measurements or {}
+    cliente.measurements[prenda] = medidas
+    db.session.commit()
+    return jsonify({'status': 'ok'})
+
+
+# -------------------------------------------------
 #                       MANEJO DE ERRORES
+# -------------------------------------------------
+
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.errorhandler(RequestEntityTooLarge)
@@ -1324,4 +2452,4 @@ if __name__ == '__main__':
         init_db()
         print('✓ Base de datos inicializada')
     
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)

@@ -71,6 +71,39 @@
         background: var(--white);
         border-radius: var(--radius-2xl);
         box-shadow: var(--shadow-lg);
+        position: relative;
+    }
+    
+    .promo-ribbon {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.55rem 1rem;
+        border-radius: var(--radius-full);
+        background: linear-gradient(135deg, #ec4899, #c026d3);
+        color: var(--white);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        box-shadow: 0 12px 30px rgba(192, 38, 211, 0.25);
+        margin-bottom: 0.75rem;
+        overflow: hidden;
+        animation: ribbonFloat 2.6s ease-in-out infinite;
+    }
+    .promo-ribbon__glow {
+        position: absolute;
+        inset: -1px;
+        background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.35), transparent 45%);
+        pointer-events: none;
+    }
+    .promo-ribbon i {
+        font-size: 1.1rem;
+    }
+    @keyframes ribbonFloat {
+        0% { transform: translateY(0); }
+        50% { transform: translateY(-3px); }
+        100% { transform: translateY(0); }
     }
     
     .product-price-box {
@@ -131,6 +164,83 @@
         margin-top: 4rem;
     }
     
+    /* Modales de pedido */
+    .order-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity var(--transition-base);
+        z-index: 1050;
+        backdrop-filter: blur(2px);
+    }
+    .order-modal.show {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .order-modal-dialog {
+        width: min(960px, 100%);
+        background: var(--white);
+        border-radius: var(--radius-2xl);
+        box-shadow: var(--shadow-2xl);
+        overflow: hidden;
+        transform: translateY(10px);
+        transition: transform var(--transition-base);
+    }
+    .order-modal.show .order-modal-dialog {
+        transform: translateY(0);
+    }
+    .order-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--gray-200);
+    }
+    .order-modal-body {
+        padding: 1.5rem;
+    }
+
+    .order-notes {
+        width: 100%;
+        min-height: 96px;
+        resize: vertical;
+    }
+
+    .qr-preview {
+        background: var(--gray-50);
+        border: 1px dashed var(--gray-200);
+        border-radius: var(--radius-xl);
+        padding: 1rem;
+        display: none;
+    }
+
+    .qr-preview img {
+        width: 100%;
+        max-width: 240px;
+        display: block;
+        margin: 0 auto;
+    }
+    .order-modal-close {
+        background: transparent;
+        border: none;
+        font-size: 1.25rem;
+        color: var(--gray-500);
+    }
+    .modal-product-card {
+        background: var(--gray-50);
+        border-radius: var(--radius-xl);
+        padding: 1rem;
+    }
+    body.modal-open-custom {
+        overflow: hidden;
+    }
+    
     @media (max-width: 991px) {
         .product-gallery {
             position: static;
@@ -188,6 +298,12 @@
                         {% if producto.is_featured %}
                         <span class="badge badge-featured">Destacado</span>
                         {% endif %}
+                        {% if producto.is_on_sale %}
+                        <span class="badge badge-promo">{{ producto.promo_label }}</span>
+                        {% if producto.has_discount %}
+                        <span class="badge badge-discount">-{{ producto.discount_percent }}%</span>
+                        {% endif %}
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -222,6 +338,13 @@
                 <h1 class="h2 mb-3">{{ producto.name }}</h1>
                 
                 <!-- Price -->
+                {% if producto.is_on_sale %}
+                <div class="promo-ribbon">
+                    <div class="promo-ribbon__glow"></div>
+                    <i class="bi bi-lightning-charge-fill"></i>
+                    <span>{{ producto.promo_label }}</span>
+                </div>
+                {% endif %}
                 <div class="product-price-box">
                     <span class="product-price">Bs {{ '%.2f'|format(producto.price) }}</span>
                     {% if producto.has_discount %}
@@ -239,32 +362,51 @@
                 {% endif %}
                 
                 <!-- CTA Buttons -->
-                <!-- CTA Buttons -->
                 <div class="d-flex flex-column gap-3">
                     {% if contact_info and contact_info.whatsapp %}
-                        {# Texto base para WhatsApp #}
-                        {% set base_text = 'Hola, vengo de la página Modas Pathy. Me interesa este producto: ' 
-                        ~ producto.name 
-                        ~ ' (Bs ' ~ '%.2f'|format(producto.price) ~ ').' %}
-
-
-                        <a href="#"
+                    <button type="button"
                             id="btn-whatsapp"
                             class="btn btn-success btn-lg"
                             data-number="{{ contact_info.whatsapp|replace('+','')|replace(' ','') }}"
-                            data-base-text="{{ base_text }}">
-                            <i class="bi bi-whatsapp me-2"></i>
-                            Comprar por WhatsApp
-                        </a>
-                        {% endif %}
+                            data-product-id="{{ producto.id }}"
+                            data-price="{{ '%.2f'|format(producto.price) }}"
+                            data-product-name="{{ producto.name }}">
+                        <i class="bi bi-whatsapp me-2"></i>
+                        Comprar por WhatsApp
+                    </button>
+                    {% endif %}
+
+                    <button type="button"
+                            id="btn-qr"
+                            class="btn btn-warning btn-lg text-dark"
+                            data-product-id="{{ producto.id }}"
+                            data-price="{{ '%.2f'|format(producto.price) }}"
+                            data-product-name="{{ producto.name }}"
+                            data-number="{{ contact_info.whatsapp|replace('+','')|replace(' ','') if contact_info and contact_info.whatsapp }}"
+                            data-qr-url="{% if site_settings and site_settings.qr_image %}{{ url_for('static', filename=site_settings.qr_image if site_settings.qr_image.startswith('qr/') else 'qr/' ~ site_settings.qr_image) }}{% endif %}">
+                        <i class="bi bi-qr-code-scan me-2"></i>
+                        Comprar con QR
+                    </button>
+
+                    <button type="button"
+                            id="btn-paypal"
+                            class="btn btn-primary btn-lg"
+                            data-product-id="{{ producto.id }}"
+                            data-price="{{ '%.2f'|format(producto.price) }}"
+                            data-product-name="{{ producto.name }}"
+                            data-paypal-rate="{{ (paypal_rate or 6.96)|round(2) }}"
+                            data-paypal-percent="{{ paypal_percent_fee }}"
+                            data-paypal-fixed="{{ paypal_fixed_fee }}">
+                        <i class="bi bi-paypal me-2"></i>
+                        Comprar con PayPal
+                    </button>
 
                     <a href="{{ url_for('catalogo') }}" class="btn btn-outline btn-lg">
-                    <i class="bi bi-arrow-left me-2"></i>
-                    Volver al catálogo
+                        <i class="bi bi-arrow-left me-2"></i>
+                        Volver al catalogo
                     </a>
                 </div>
 
-                
                 <!-- Features -->
                 <div class="features-list">
                     <span class="feature-item">
@@ -325,6 +467,55 @@
     {% endif %}
 </div>
 
+<!-- Modal de compra -->
+<div class="order-modal" id="checkoutModal" aria-hidden="true">
+    <div class="order-modal-dialog">
+        <div class="order-modal-header">
+            <div>
+                <p class="text-muted small mb-1" data-subtitle>Compra segura</p>
+                <h5 class="mb-0" data-title>Comprar</h5>
+            </div>
+            <button class="order-modal-close" type="button" aria-label="Cerrar">&times;</button>
+        </div>
+        <div class="order-modal-body">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-4">
+                    <div class="modal-product-card">
+                        <div class="ratio ratio-1x1 rounded-3 overflow-hidden">
+                            <img data-image src="{{ url_for('static', filename='uploads/' ~ (producto.main_image.filename if producto.main_image else '')) }}" alt="{{ producto.name }}" style="width: 100%; height: 100%; object-fit: cover;">
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-8">
+                    <h4 class="mb-1">{{ producto.name }}</h4>
+                    <p class="text-muted mb-2">Selecciona tu metodo y confirma la compra.</p>
+                    <div class="d-flex align-items-center gap-2 mb-1">
+                        <span class="h4 mb-0" data-price>Bs {{ '%.2f'|format(producto.price) }}</span>
+                        <span class="text-muted small" data-price-usd></span>
+                    </div>
+                    <p class="text-muted small mb-2" data-paypal-note style="display: none;">
+                        Monto convertido a USD (T.C. <span data-rate-label>{{ (paypal_rate or 6.96)|round(2) }}</span>) incluyendo comision PayPal.
+                    </p>
+                    <div id="qrPreview" class="qr-preview mt-2">
+                        <p class="fw-semibold mb-2">Escanea el QR para pagar.</p>
+                        <img data-qr alt="QR de pago">
+                    </div>
+                    <div class="mt-3">
+                        <label class="form-label mb-1" for="orderNotes">Especificaciones o detalles del pedido</label>
+                        <textarea id="orderNotes" class="form-control order-notes" placeholder="Ej: Talla M, color negro, entregar por la tarde"></textarea>
+                        <small class="text-muted">Se guardará junto con el pedido.</small>
+                    </div>
+                    <div id="paypal-buttons" class="mt-2 d-none"></div>
+                    <div class="d-flex flex-column flex-md-row gap-2 mt-3">
+                        <button class="btn btn-primary btn-lg flex-fill" data-action>Continuar</button>
+                        <button class="btn btn-light btn-lg flex-fill" data-cancel>Cancelar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Lightbox -->
 <div id="lightbox" class="lightbox">
     <button class="btn-close" aria-label="Cerrar">
@@ -335,90 +526,404 @@
 {% endblock %}
 
 {% block scripts %}
+{% if paypal_client_id %}
+<script src="https://www.paypal.com/sdk/js?client-id={{ paypal_client_id }}&currency=USD"></script>
+{% endif %}
+
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
+    // --- GALERÍA / LIGHTBOX ---
     const mainImage = document.getElementById('mainImage');
     const mainWrapper = document.getElementById('mainImageWrapper');
     const thumbnails = document.querySelectorAll('.thumbnail');
     const lightbox = document.getElementById('lightbox');
     const lightboxImage = document.getElementById('lightboxImage');
-    const closeBtn = lightbox.querySelector('.btn-close');
-    
-    // Thumbnail click
+    const lightboxClose = lightbox ? lightbox.querySelector('.btn-close') : null;
+
+    let selectedImageUrl = mainImage ? (mainImage.dataset.zoom || mainImage.src) : '';
+
     thumbnails.forEach(thumb => {
-        thumb.addEventListener('click', function() {
+        thumb.addEventListener('click', function () {
             const src = this.dataset.src;
-            
-            // Update main image
+            if (!mainImage || !src) return;
             mainImage.src = src;
             mainImage.dataset.zoom = src;
-            
-            // Update active state
+            selectedImageUrl = src;
+
             thumbnails.forEach(t => t.classList.remove('active'));
             this.classList.add('active');
         });
     });
-    
-    // Lightbox open
-    if (mainWrapper) {
-        mainWrapper.addEventListener('click', function() {
-            const src = mainImage.dataset.zoom || mainImage.src;
-            lightboxImage.src = src;
+
+    if (mainWrapper && lightbox && lightboxImage && lightboxClose) {
+        mainWrapper.addEventListener('click', function () {
+            if (!selectedImageUrl && mainImage) {
+                selectedImageUrl = mainImage.dataset.zoom || mainImage.src;
+            }
+            if (!selectedImageUrl) return;
+            lightboxImage.src = selectedImageUrl;
             lightbox.classList.add('show');
-            document.body.style.overflow = 'hidden';
+        });
+
+        lightboxClose.addEventListener('click', function () {
+            lightbox.classList.remove('show');
+        });
+
+        lightbox.addEventListener('click', function (e) {
+            if (e.target === lightbox) {
+                lightbox.classList.remove('show');
+            }
         });
     }
-    
-    // Lightbox close
-    function closeLightbox() {
-        lightbox.classList.remove('show');
-        document.body.style.overflow = '';
-    }
-    
-    closeBtn.addEventListener('click', closeLightbox);
-    
-    lightbox.addEventListener('click', function(e) {
-        if (e.target === lightbox) {
-            closeLightbox();
-        }
-    });
-    
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && lightbox.classList.contains('show')) {
-            closeLightbox();
-        }
-    });
-});
-</script>
-<script>
-document.addEventListener('DOMContentLoaded', function () {
+
+    // --- MODAL / CHECKOUT ---
+    const modal = document.getElementById('checkoutModal');
+    const modalTitle = modal ? modal.querySelector('[data-title]') : null;
+    const modalSubtitle = modal ? modal.querySelector('[data-subtitle]') : null;
+    const modalImage = modal ? modal.querySelector('[data-image]') : null;
+    const modalPriceUsd = modal ? modal.querySelector('[data-price-usd]') : null;
+    const paypalNote = modal ? modal.querySelector('[data-paypal-note]') : null;
+    const paypalRateLabel = modal ? modal.querySelector('[data-rate-label]') : null;
+    const qrPreview = modal ? modal.querySelector('#qrPreview') : null;
+    const qrImg = qrPreview ? qrPreview.querySelector('[data-qr]') : null;
+    const notesField = modal ? modal.querySelector('#orderNotes') : null;
+    const actionBtn = modal ? modal.querySelector('[data-action]') : null;
+    const cancelBtn = modal ? modal.querySelector('[data-cancel]') : null;
+    const closeModalBtn = modal ? modal.querySelector('.order-modal-close') : null;
+    const paypalButtonsContainer = document.getElementById('paypal-buttons');
+
     const btnWhats = document.getElementById('btn-whatsapp');
-    const mainImage = document.getElementById('mainImage');
+    const btnQr = document.getElementById('btn-qr');
+    const btnPaypal = document.getElementById('btn-paypal');
 
-    if (!btnWhats || !mainImage) {
-        return;
+    const baseBtn = btnPaypal || btnWhats || btnQr;
+
+    const productId = baseBtn ? parseInt(baseBtn.dataset.productId || '0', 10) : null;
+    const productName = baseBtn ? (baseBtn.dataset.productName || '') : '';
+    const price = baseBtn ? parseFloat(baseBtn.dataset.price || '0') : 0;
+    const paypalRateRaw = baseBtn ? parseFloat(baseBtn.dataset.paypalRate || '6.96') : 6.96;
+    const paypalPercentRaw = baseBtn ? parseFloat(baseBtn.dataset.paypalPercent || '0') : 0;
+    const paypalFixedRaw = baseBtn ? parseFloat(baseBtn.dataset.paypalFixed || '0') : 0;
+    const paypalRate = Number.isNaN(paypalRateRaw) ? 0 : paypalRateRaw;
+    const paypalPercent = Number.isNaN(paypalPercentRaw) ? 0 : paypalPercentRaw;
+    const paypalFixed = Number.isNaN(paypalFixedRaw) ? 0 : paypalFixedRaw;
+    const safePaypalRate = paypalRate > 0 ? paypalRate : 6.96;
+    const waNumber = btnWhats ? (btnWhats.dataset.number || '') : (btnQr ? (btnQr.dataset.number || '') : '');
+    const qrNumber = btnQr ? (btnQr.dataset.number || '') : '';
+    const qrUrl = btnQr ? (btnQr.dataset.qrUrl || '') : '';
+
+    let checkoutMode = null;
+    let lastUsd = null;
+    let lastNotes = '';
+
+    const computeUsd = (bs) => {
+        const net = bs / safePaypalRate;
+        const denom = (1 - paypalPercent);
+        const divisor = denom !== 0 ? denom : 1;
+        return (net + paypalFixed) / divisor;
+    };
+
+    const getNotes = () => (notesField ? (notesField.value || '').trim() : '');
+
+    function openModal(mode) {
+        if (!modal) return;
+        checkoutMode = mode;
+        const isPaypal = mode === 'paypal';
+        const isQr = mode === 'qr';
+
+        if (modalTitle) {
+            modalTitle.textContent = isPaypal ? 'Comprar con PayPal' : isQr ? 'Comprar con QR' : 'Comprar por WhatsApp';
+        }
+        if (modalSubtitle) {
+            modalSubtitle.textContent = isPaypal
+                ? 'Pago seguro via PayPal'
+                : isQr
+                    ? 'Escanea y envia tu comprobante por WhatsApp'
+                    : 'Confirma y envia el pedido por WhatsApp';
+        }
+        if (modalImage) {
+            const imgSrc = selectedImageUrl || (mainImage ? (mainImage.dataset.zoom || mainImage.src) : '');
+            if (imgSrc) modalImage.src = imgSrc;
+        }
+        if (modalPriceUsd) {
+            if (isPaypal) {
+                const estimatedUsd = computeUsd(price);
+                modalPriceUsd.textContent = `USD ${estimatedUsd.toFixed(2)}`;
+            } else {
+                modalPriceUsd.textContent = '';
+            }
+        }
+        if (paypalNote) {
+            if (isPaypal) {
+                if (paypalRateLabel) {
+                    paypalRateLabel.textContent = safePaypalRate.toFixed(2);
+                }
+                paypalNote.classList.remove('text-danger');
+            }
+            paypalNote.style.display = isPaypal ? 'block' : 'none';
+        }
+        if (paypalButtonsContainer) {
+            paypalButtonsContainer.classList.toggle('d-none', !isPaypal);
+        }
+        if (qrPreview) {
+            qrPreview.style.display = isQr && qrUrl ? 'block' : 'none';
+        }
+        if (qrImg && qrUrl) {
+            qrImg.src = qrUrl;
+        }
+        if (actionBtn) {
+            actionBtn.textContent = isQr ? 'Enviar comprobante por WhatsApp' : 'Continuar';
+            actionBtn.classList.toggle('btn-warning', isQr);
+            actionBtn.classList.toggle('btn-primary', !isQr);
+            actionBtn.classList.toggle('text-dark', isQr);
+        }
+        lastNotes = getNotes();
+
+        if (isPaypal) {
+            renderPaypalButtons();
+        }
+
+        modal.classList.add('show');
+        document.body.classList.add('modal-open-custom');
     }
 
-    btnWhats.addEventListener('click', function (e) {
-        e.preventDefault();
+    function closeModal() {
+        if (!modal) return;
+        modal.classList.remove('show');
+        document.body.classList.remove('modal-open-custom');
+    }
 
-        const number = this.dataset.number || '';
-        const baseText = this.dataset.baseText || '';
+    // --- WHATSAPP ---
+    async function handleWhatsapp() {
+        if (!waNumber) {
+            alert('No hay numero de WhatsApp configurado.');
+            return;
+        }
+        if (!productId) {
+            alert('Producto invalido.');
+            return;
+        }
+        try {
+            const payload = {
+                product_id: productId,
+                image_url: selectedImageUrl,
+                total: price,
+                order_notes: getNotes()
+            };
+            const res = await fetch('/api/checkout/whatsapp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('No se pudo generar el pedido');
+            const data = await res.json();
 
-        // Imagen que está grande (la seleccionada)
-        const imgSrc = mainImage.getAttribute('data-zoom') || mainImage.src;
+            const absImage = selectedImageUrl
+                ? new URL(selectedImageUrl, window.location.origin).href
+                : '';
 
-        // URL absoluta de esa imagen
-        const absoluteImageUrl = new URL(imgSrc, window.location.origin).href;
+            const lines = [
+                'Vengo desde la pagina Modas Pathy',
+                `Pedido: ${data.order_code}`,
+                `Producto: ${productName}`,
+                `Precio: Bs ${price.toFixed(2)}`,
+                getNotes() ? `Especificaciones: ${getNotes()}` : '',
+                absImage ? `Imagen: ${absImage}` : ''
+            ].filter(Boolean);
 
-        // 👇 SOLO UN ENLACE: el de la imagen seleccionada
-        const finalText = `${baseText}\nEnlace de la imagen seleccionada: ${absoluteImageUrl}`;
+            const message = lines.join('\n');
 
-        const waUrl = `https://wa.me/${number}?text=${encodeURIComponent(finalText)}`;
-        window.open(waUrl, '_blank');
+            const waUrl = `https://wa.me/${waNumber}?text=${encodeURIComponent(message)}`;
+
+            window.open(waUrl, '_blank');
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            }
+        } catch (err) {
+            alert(err.message || 'Ocurrio un error al crear el pedido.');
+        }
+    }
+
+    // --- QR ---
+    async function handleQr() {
+        const number = qrNumber || waNumber;
+        if (!number) {
+            alert('No hay numero de WhatsApp configurado.');
+            return;
+        }
+        if (!qrUrl) {
+            alert('No hay un QR configurado.');
+            return;
+        }
+        if (!productId) {
+            alert('Producto invalido.');
+            return;
+        }
+        try {
+            const payload = {
+                product_id: productId,
+                image_url: selectedImageUrl,
+                total: price,
+                order_notes: getNotes()
+            };
+            const res = await fetch('/api/checkout/qr', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error('No se pudo generar el pedido');
+            const data = await res.json();
+            const absImage = selectedImageUrl
+                ? new URL(selectedImageUrl, window.location.origin).href
+                : '';
+
+            const lines = [
+                'Pago con QR - Modas Pathy',
+                `Pedido: ${data.order_code}`,
+                `Producto: ${productName}`,
+                `Precio: Bs ${price.toFixed(2)}`,
+                getNotes() ? `Especificaciones: ${getNotes()}` : '',
+                absImage ? `Imagen: ${absImage}` : '',
+                'Adjunto comprobante de pago.'
+            ].filter(Boolean);
+
+            const waUrl = `https://wa.me/${number}?text=${encodeURIComponent(lines.join('\n'))}`;
+            window.open(waUrl, '_blank');
+            if (data.redirect_url) {
+                window.location.href = data.redirect_url;
+            }
+        } catch (err) {
+            alert(err.message || 'Ocurrio un error al crear el pedido.');
+        }
+    }
+
+    // --- PAYPAL BUTTONS ---
+    function renderPaypalButtons() {
+        if (!paypalButtonsContainer) return;
+        if (!window.paypal) {
+            alert('PayPal no esta disponible en este momento.');
+            return;
+        }
+        if (!productId) {
+            alert('Producto invalido.');
+            return;
+        }
+
+        paypalButtonsContainer.innerHTML = '';
+
+        window.paypal.Buttons({
+            style: { layout: 'vertical', shape: 'rect', color: 'gold', label: 'paypal' },
+            createOrder: async () => {
+                lastNotes = getNotes();
+                const payload = {
+                    product_id: productId,
+                    image_url: selectedImageUrl,
+                    order_notes: lastNotes
+                };
+                const res = await fetch('/api/checkout/paypal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    const msg = await res.text();
+                    throw new Error(msg || 'No se pudo crear la orden de PayPal');
+                }
+                const data = await res.json();
+                const amountUsd = parseFloat(data.amount_usd || '0');
+                if (modalPriceUsd && !Number.isNaN(amountUsd)) {
+                    modalPriceUsd.textContent = `USD ${amountUsd.toFixed(2)}`;
+                }
+                lastUsd = amountUsd;
+                return data.order_id;
+            },
+            onApprove: async (data) => {
+                const res = await fetch('/api/checkout/paypal/capture', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        order_id: data.orderID,
+                        image_url: selectedImageUrl,
+                        order_notes: lastNotes || getNotes()
+                    })
+                });
+                if (!res.ok) {
+                    const msg = await res.text();
+                    throw new Error(msg || 'No se pudo capturar el pago en PayPal');
+                }
+                const result = await res.json();
+                if (result.redirect_url) {
+                    window.location.href = result.redirect_url;
+                } else {
+                    alert('Pago completado, pero falta URL de redirección.');
+                }
+            },
+            onError: (err) => {
+                console.error(err);
+                alert('No se pudo completar el pago con PayPal.');
+            }
+        }).render('#paypal-buttons');
+    }
+
+    // --- EVENTOS DE BOTONES ---
+    if (btnWhats) {
+        btnWhats.addEventListener('click', (e) => {
+            e.preventDefault();
+            openModal('whatsapp');
+        });
+    }
+
+    if (btnPaypal) {
+        btnPaypal.addEventListener('click', (e) => {
+            e.preventDefault();
+            openModal('paypal');
+        });
+    }
+
+    if (btnQr) {
+        btnQr.addEventListener('click', (e) => {
+            e.preventDefault();
+            openModal('qr');
+        });
+    }
+
+    if (actionBtn) {
+        actionBtn.addEventListener('click', () => {
+            if (checkoutMode === 'paypal') {
+                return;
+            }
+            if (checkoutMode === 'qr') {
+                handleQr();
+            } else {
+                handleWhatsapp();
+            }
+        });
+    }
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', closeModal);
+    }
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeModal);
+    }
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+    }
+
+    // ESC para cerrar modal y lightbox
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeModal();
+            if (lightbox) {
+                lightbox.classList.remove('show');
+            }
+        }
     });
 });
 </script>
-
 
 {% endblock %}

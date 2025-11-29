@@ -47,11 +47,27 @@
                                 <div class="col-md-4">
                                     <label class="form-label">Precio Original</label>
                                     {{ form.original_price(class="form-control", placeholder="0.00") }}
-                                    <small class="text-muted">Para mostrar descuento</small>
+                                    <small class="text-muted">Solo se mostrará si marcas el producto en oferta</small>
                                 </div>
                                 <div class="col-md-4">
                                     <label class="form-label">Categoría *</label>
                                     {{ form.category(class="form-control form-select") }}
+                                </div>
+                            </div>
+                            
+                            <div class="row g-3 align-items-end mt-1">
+                                <div class="col-md-4">
+                                    <div class="form-check form-switch">
+                                        {{ form.is_on_sale(class="form-check-input", id="is_on_sale") }}
+                                        <label class="form-check-label" for="is_on_sale">
+                                            Mostrar como producto en oferta
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label">Texto de promoción</label>
+                                    {{ form.promo_text(class="form-control", id="promo_text", placeholder="Ej: -20% OFF, Liquidación, 2x1...") }}
+                                    <small class="text-muted">Se usará como badge animado cuando el producto esté en oferta.</small>
                                 </div>
                             </div>
                         </div>
@@ -163,6 +179,8 @@ const imageInput = document.getElementById('imageInput');
 const previewGrid = document.getElementById('previewGrid');
 const mainIndexInput = document.getElementById('mainImageIndex');
 const isNew = {{ 'true' if nuevo else 'false' }};
+const saleToggle = document.getElementById('is_on_sale');
+const promoInput = document.getElementById('promo_text');
 
 let filesList = [];
 let mainIndex = null;
@@ -175,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
         existingMainId = mainItem.dataset.id;
         mainIndexInput.value = `b_${existingMainId}`;
     }
+    togglePromoField();
 });
 
 // Upload zone events
@@ -315,6 +334,15 @@ function updateMainIndex() {
         mainIndexInput.value = '';
     }
 }
+
+function togglePromoField() {
+    if (!promoInput) return;
+    const enabled = saleToggle?.checked;
+    promoInput.toggleAttribute('disabled', !enabled);
+    promoInput.classList.toggle('opacity-75', !enabled);
+}
+
+saleToggle?.addEventListener('change', togglePromoField);
 
 // Form validation
 document.getElementById('productForm').addEventListener('submit', function(e) {

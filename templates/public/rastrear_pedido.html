@@ -1,0 +1,144 @@
+{% extends 'public/base.html' %}
+
+{% block title %}Rastrear Pedido — Modas Pathy{% endblock %}
+
+{% block styles %}
+<style>
+    .timeline {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        position: relative;
+    }
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 10px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--gray-200);
+    }
+    .timeline-item {
+        display: grid;
+        grid-template-columns: 24px 1fr;
+        gap: 0.75rem;
+        position: relative;
+    }
+    .timeline-dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: inline-block;
+        box-shadow: 0 0 0 4px rgba(143, 45, 86, 0.15);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="container py-4 py-md-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-0 overflow-hidden">
+                <div class="card-body p-4 p-md-5">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <div class="badge bg-primary-subtle text-primary rounded-pill px-3 py-2">
+                            <i class="bi bi-compass me-2"></i>Rastrear Pedido
+                        </div>
+                    </div>
+                    <h2 class="mb-3">Sigue tu pedido</h2>
+                    <p class="text-muted mb-4">Ingresa tu número de pedido para ver el estado y los movimientos.</p>
+                    <form class="d-flex flex-column flex-md-row gap-3" method="get" action="{{ url_for('rastrear_pedido') }}">
+                        <div class="flex-grow-1">
+                            <input type="text" class="form-control form-control-lg" name="code" placeholder="Ej: MP-2025-000123" value="{{ code or '' }}" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-search me-2"></i>Buscar
+                        </button>
+                    </form>
+                </div>
+
+                {% if pedido %}
+                <div class="bg-light border-top p-4">
+                    <div class="d-flex flex-column flex-md-row gap-3 align-items-start align-items-md-center justify-content-between">
+                        <div>
+                            <p class="text-muted small mb-1">Código de pedido</p>
+                            <h4 class="mb-0">{{ pedido.order_code }}</h4>
+                        </div>
+                        <span class="badge bg-success-subtle text-success px-3 py-2 rounded-pill">{{ pedido.status }}</span>
+                    </div>
+                </div>
+
+                <div class="p-4">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <div class="ratio ratio-1x1 rounded-4 overflow-hidden border">
+                                {% if pedido.image_url %}
+                                <img src="{{ pedido.image_url }}" alt="producto" style="width: 100%; height: 100%; object-fit: cover;">
+                                {% elif pedido.product and pedido.product.main_image %}
+                                <img src="{{ url_for('static', filename='uploads/' ~ pedido.product.main_image.filename) }}" alt="producto" style="width: 100%; height: 100%; object-fit: cover;">
+                                {% else %}
+                                <div class="d-flex align-items-center justify-content-center h-100 text-muted">
+                                    <i class="bi bi-image" style="font-size: 2rem;"></i>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <div class="mb-3">
+                                <p class="text-muted small mb-1">Producto</p>
+                                <h5 class="mb-0">{{ pedido.product.name if pedido.product else 'Producto' }}</h5>
+                            </div>
+                            <div class="mb-3">
+                                <p class="text-muted small mb-1">Método de pago</p>
+                                <span class="badge bg-{% if pedido.payment_method=='paypal' %}primary{% else %}success{% endif %} px-3 py-2">
+                                    {{ pedido.payment_method|capitalize }}
+                                </span>
+                            </div>
+                            <div class="mb-3">
+                                <p class="text-muted small mb-1">Total</p>
+                                <h5 class="mb-0">Bs {{ '%.2f'|format(pedido.total) }}</h5>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <div class="mb-3">
+                        <p class="text-muted small mb-2">Progreso</p>
+                        <div class="progress" style="height: 12px;">
+                            {% set idx = statuses.index(pedido.status) if pedido.status in statuses else 0 %}
+                            {% set pct = ((idx + 1) / (statuses|length)) * 100 %}
+                            <div class="progress-bar bg-primary" role="progressbar" style="width: {{ pct }}%;" aria-valuenow="{{ pct|int }}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                        <div class="d-flex justify-content-between mt-2 text-muted small">
+                            {% for st in statuses %}
+                            <span class="{% if st == pedido.status %}fw-semibold text-primary{% endif %}">{{ st }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <p class="text-muted small mb-2">Historial</p>
+                        <div class="timeline">
+                            {% for h in (pedido.history or [])|reverse %}
+                            <div class="timeline-item">
+                                <div class="timeline-dot bg-primary"></div>
+                                <div>
+                                    <div class="fw-semibold">{{ h.status }}</div>
+                                    <div class="text-muted small">{{ h.timestamp }}</div>
+                                    {% if h.note %}<div class="small">{{ h.note }}</div>{% endif %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="text-muted">Sin movimientos aún.</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

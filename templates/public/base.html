@@ -128,6 +128,14 @@
                 </a>
             </li>
             
+            <li class="nav-item">
+                <a href="{{ url_for('rastrear_pedido') }}" 
+                   class="nav-link {% if request.endpoint == 'rastrear_pedido' %}active{% endif %}">
+                    <i class="bi bi-compass"></i>
+                    <span>Rastrear Pedido</span>
+                </a>
+            </li>
+            
             <!-- Categorías -->
             {% if public_categories %}
             <li class="nav-item mt-3">
@@ -217,6 +225,7 @@
                         <li class="mb-2"><a href="{{ url_for('catalogo') }}" class="text-muted">Catálogo</a></li>
                         <li class="mb-2"><a href="{{ url_for('quienes_somos') }}" class="text-muted">Quiénes Somos</a></li>
                         <li class="mb-2"><a href="{{ url_for('contacto') }}" class="text-muted">Contacto</a></li>
+                        <li class="mb-2"><a href="{{ url_for('rastrear_pedido') }}" class="text-muted">Rastrear Pedido</a></li>
                     </ul>
                 </div>
                 

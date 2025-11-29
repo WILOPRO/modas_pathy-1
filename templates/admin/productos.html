@@ -80,6 +80,9 @@
                                     {% if prod.is_featured %}
                                     <span class="status-badge status-badge-featured">Destacado</span>
                                     {% endif %}
+                                    {% if prod.is_on_sale %}
+                                    <span class="status-badge status-badge-sale">{{ prod.promo_label }}</span>
+                                    {% endif %}
                                 </div>
                             </td>
                             <td>
