@@ -3,53 +3,102 @@
 {% block title %}Pedido {{ pedido.code }} - Modas Pathy{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid py-4 compact-detail">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
             <p class="text-muted small mb-1">Detalle de pedido personalizado</p>
             <h2 class="mb-0">Pedido {{ pedido.code }}</h2>
         </div>
         <div class="d-flex gap-2">
+            {% if not tailor_only %}
             <form method="post" action="{{ url_for('admin_custom_order_eliminar', order_id=pedido.id) }}" onsubmit="return confirm('¿Eliminar el pedido {{ pedido.code }}?');">
                 <button class="btn btn-outline-danger"><i class="bi bi-trash"></i> Eliminar</button>
             </form>
+            {% endif %}
             <a href="{{ url_for('admin_custom_orders') }}" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> Volver
             </a>
         </div>
     </div>
 
-    <div class="row g-3">
+    <div class="row g-2">
         <div class="col-lg-4">
-            <div class="card shadow-sm border-0 mb-3">
+            <div class="card shadow-sm border-0 mb-2">
                 <div class="card-body">
                     <h5 class="fw-bold mb-3">Cliente</h5>
                     <p class="mb-1 fw-semibold">{{ pedido.client.name }}</p>
                     <p class="text-muted mb-0"><i class="bi bi-telephone me-1"></i>{{ pedido.client.phone }}</p>
                 </div>
             </div>
-            <div class="card shadow-sm border-0">
-                <div class="card-body">
-                    <h5 class="fw-bold mb-3">Estado</h5>
-                    <p class="mb-1"><span class="badge bg-primary-subtle text-primary">{{ CUSTOM_ORDER_STATUS_LABELS.get(pedido.status, pedido.status.title()) }}</span></p>
-                    <p class="mb-1"><strong>Urgente:</strong> {{ 'Sí' if pedido.is_urgent else 'No' }}</p>
-                    <p class="mb-1"><strong>Entrega:</strong> {{ pedido.delivery_date.strftime('%d/%m/%Y') if pedido.delivery_date else '-' }}</p>
-                    <p class="mb-1"><strong>Adelanto:</strong> Bs {{ '%.2f'|format(pedido.deposit or 0) }}</p>
-                    <p class="mb-0"><strong>Total:</strong> Bs {{ '%.2f'|format(pedido.total or 0) }}</p>
-                    <div class="mt-3 d-grid">
-                        <button class="btn btn-outline-secondary btn-sm" onclick="window.print()"><i class="bi bi-printer"></i> Imprimir</button>
-                    </div>
-                </div>
-            </div>
         </div>
         <div class="col-lg-8">
-            <div class="card shadow-sm border-0 mb-3">
+            <div class="card shadow-sm border-0 mb-2">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h5 class="fw-bold mb-0">Pedido</h5>
+                        {% if not tailor_only %}
                         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editOrderModal">
                             <i class="bi bi-pencil"></i> Editar pedido
                         </button>
+                        {% endif %}
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <span class="badge bg-primary-subtle text-primary">{{ CUSTOM_ORDER_STATUS_LABELS.get(pedido.status, pedido.status.title()) }}</span>
+                        <span class="small"><strong>Urgente:</strong> {{ 'Sí' if pedido.is_urgent else 'No' }}</span>
+                        <span class="small"><strong>Entrega:</strong> {{ pedido.delivery_date.strftime('%d/%m/%Y') if pedido.delivery_date else '-' }}</span>
+                        <span class="small"><strong>Adelanto:</strong> Bs {{ '%.2f'|format(pedido.deposit or 0) }}</span>
+                        <span class="small"><strong>Total:</strong> Bs {{ '%.2f'|format(pedido.total or 0) }}</span>
+                        <span class="small"><strong>Asignado:</strong> {{ pedido.assigned_user.name or pedido.assigned_user.username if pedido.assigned_user else 'Sin asignar' }}</span>
+                        {% set progress = (pedido.measurements or {}).get('_progress', {}) %}
+                        {% if progress.get('total', 0) %}
+                        <span class="badge text-bg-light border">Listas {{ progress.get('listas',0) }}/{{ progress.get('total',0) }}</span>
+                        {% endif %}
+                        <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="window.print()">
+                            <i class="bi bi-printer"></i>
+                        </button>
+                    </div>
+                    {% set next_map = {'pendiente': 'en_confeccion', 'en_confeccion': 'listo', 'listo': 'entregado'} %}
+                    {% set next_status = next_map.get(pedido.status) %}
+                    {% set days_left = (pedido.delivery_date - today).days if pedido.delivery_date else None %}
+                    {% if days_left is not none and days_left <= 2 %}
+                    <div class="alert alert-warning d-flex align-items-center gap-2 mb-2">
+                        <i class="bi bi-alarm"></i>
+                        <div>
+                            <div class="fw-semibold">Entrega cercana</div>
+                            <div class="small mb-0">
+                                {% if days_left < 0 %}
+                                    Atrasado por {{ days_left | abs }} día(s).
+                                {% elif days_left == 0 %}
+                                    Entrega hoy.
+                                {% elif days_left == 1 %}
+                                    Falta 1 día para entregar.
+                                {% else %}
+                                    Faltan {{ days_left }} día(s) para entregar.
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="alert alert-light border d-flex align-items-center justify-content-between gap-2 mb-3">
+                        <div>
+                            <div class="fw-semibold">Siguiente paso</div>
+                            <div class="small mb-0">
+                                {% if next_status %}
+                                    Mover a "{{ CUSTOM_ORDER_STATUS_LABELS.get(next_status, next_status|title) }}" cuando avance.
+                                {% else %}
+                                    Pedido completado.
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if next_status and not tailor_only %}
+                        <form method="post" action="{{ url_for('admin_custom_order_estado', order_id=pedido.id) }}" class="mb-0">
+                            <input type="hidden" name="status" value="{{ next_status }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button class="btn btn-sm btn-primary" type="submit">
+                                <i class="bi bi-arrow-right-circle"></i> Avanzar
+                            </button>
+                        </form>
+                        {% endif %}
                     </div>
                     <p class="mb-1"><strong>Prenda principal:</strong> {{ pedido.garment_type }}</p>
                     <p class="mb-3"><strong>Observaciones:</strong> {{ pedido.observations or 'N/A' }}</p>
@@ -65,37 +114,35 @@
                     </div>
                     {% endif %}
 
-                    <div class="row g-3">
-                        {% for k,v in (pedido.measurements or {}).items() if k not in ['referencia_prenda','nota_referencia','_history'] %}
-                        <div class="col-md-4">
-                            <div class="p-2 bg-light rounded border">
-                                <div class="text-muted small text-uppercase">{{ k.replace('_',' ') }}</div>
-                                <div class="fw-semibold">{{ v }}</div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                        {% if not pedido.measurements %}
-                        <div class="col-12 text-muted">Sin medidas registradas.</div>
-                        {% endif %}
+                    <div class="alert alert-light border small mb-0">
+                        Las medidas detalladas estan en la seccion "Prendas en este pedido".
                     </div>
                 </div>
             </div>
-            <div class="card shadow-sm border-0 mb-3">
+            <div class="card shadow-sm border-0 mb-2">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <h5 class="fw-bold mb-0">Prendas en este pedido</h5>
-                        <span class="badge text-bg-light border">{{ pedido.items.count() }} prenda(s)</span>
+                        <div class="d-flex align-items-center gap-2">
+                            {% if not tailor_only %}
+                            <button type="button" class="btn btn-sm btn-outline-success" id="btnAddItemModal">
+                                <i class="bi bi-plus-circle me-1"></i>Agregar prenda
+                            </button>
+                            {% endif %}
+                            <span class="badge text-bg-light border">{{ pedido.items.count() }} prenda(s)</span>
+                        </div>
                     </div>
                     {% if pedido.items.count() %}
-                    <div class="row g-3">
+                    <div class="row g-1 align-items-center">
                         {% for item in pedido.items %}
                         <div class="col-md-6">
-                            <div class="border rounded p-3 h-100">
+                            <div class="border rounded p-2 h-100">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
                                         <div class="fw-semibold">{{ item.garment_type }}</div>
                                         <div class="text-muted small">{{ item.created_at.strftime('%d/%m/%Y') }}</div>
                                     </div>
+                                    {% if not tailor_only %}
                                     <div class="btn-group btn-group-sm">
                                         <button class="btn btn-outline-primary btn-edit-item"
                                             data-item-id="{{ item.id }}"
@@ -103,21 +150,50 @@
                                             data-measures='{{ item.measurements|tojson }}'>
                                             <i class="bi bi-pencil"></i>
                                         </button>
+                                        <button class="btn btn-outline-success btn-assign-workshop"
+                                            data-item-id="{{ item.id }}"
+                                            data-garment="{{ item.garment_type }}"
+                                            data-workshop="{{ item.workshop.id if item.workshop else '' }}"
+                                            data-due="{{ item.workshop_due_date.strftime('%Y-%m-%d') if item.workshop_due_date else '' }}"
+                                            data-status="{{ item.workshop_status or 'pendiente' }}">
+                                            <i class="bi bi-send"></i>
+                                        </button>
+                                        {% if item.workshop_status != 'entregado' %}
+                                        <button class="btn btn-outline-primary btn-deliver-item"
+                                            data-item-id="{{ item.id }}">
+                                            <i class="bi bi-box-arrow-up"></i>
+                                        </button>
+                                        {% endif %}
+                                        {% if item.workshop %}
+                                        <button class="btn btn-outline-warning btn-cancel-workshop"
+                                            data-item-id="{{ item.id }}">
+                                            <i class="bi bi-x-circle"></i>
+                                        </button>
+                                        {% endif %}
                                         <form method="post" action="{{ url_for('admin_custom_order_item_eliminar', order_id=pedido.id, item_id=item.id) }}" onsubmit="return confirm('Eliminar la prenda?');">
                                             <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash"></i></button>
                                         </form>
                                     </div>
+                                    {% endif %}
                                 </div>
                                 {% set item_measures = item.measurements or {} %}
                                 {% if item_measures %}
-                                <div class="row g-2">
+                                <div class="row g-1">
                                     {% for k,v in item_measures.items() if k not in ['referencia_prenda','nota_referencia','_history'] %}
-                                    <div class="col-6">
-                                        <div class="small text-muted text-uppercase">{{ k.replace('_',' ') }}</div>
-                                        <div class="fw-semibold">{{ v }}</div>
+                                    <div class="col-6 d-flex justify-content-between align-items-center small text-muted">
+                                        <span class="text-uppercase">{{ k.replace('_',' ') }}</span>
+                                        <span class="fw-semibold text-dark ms-1">{{ v }}</span>
                                     </div>
                                     {% endfor %}
                                 </div>
+                                {% endif %}
+                                {% if item.workshop %}
+                                <div class="alert alert-success mt-2 py-1 px-2 mb-1">
+                                    <div class="small fw-semibold mb-0">{{ item.workshop.name }}</div>
+                                    <div class="small mb-0 text-muted">{{ item.workshop.phone or 'Sin telefono' }}</div>
+                                    <div class="small mb-0">Estado taller: {{ WORKSHOP_ITEM_STATUS_LABELS.get(item.workshop_status or 'pendiente', item.workshop_status) }}</div>
+                                    <div class="small mb-0">Entrega taller: {{ item.workshop_due_date.strftime('%d/%m/%Y') if item.workshop_due_date else 'Sin fecha' }}</div>
+                                    </div>
                                 {% endif %}
                                 {% if item_measures.get('referencia_prenda') %}
                                 <div class="alert alert-info mt-2 py-1 px-2 mb-0">
@@ -138,7 +214,7 @@
                 <div class="card-body">
                     <h5 class="fw-bold mb-3">Imágenes</h5>
                     {% if pedido.images.count() %}
-                    <div class="row g-3">
+                    <div class="row g-2">
                         {% for img in pedido.images.all() %}
                         <div class="col-6 col-md-4">
                             <div class="ratio ratio-1x1 rounded overflow-hidden border">
@@ -179,6 +255,20 @@
     </div>
 </div>
 
+<style>
+.compact-detail .row.g-2 { --bs-gutter-x: 0.75rem; --bs-gutter-y: 0.75rem; }
+.compact-detail .card-body { padding: 0.95rem 1rem; }
+.compact-detail .card.shadow-sm { border-radius: 12px; }
+.compact-detail .border.rounded.p-2 { padding: 0.75rem !important; }
+.compact-detail .mb-3 { margin-bottom: 0.9rem !important; }
+@media (max-width: 768px) {
+    .compact-detail { padding: 1rem 0.6rem; }
+    .compact-detail .card-body { padding: 0.85rem 0.9rem; }
+    .compact-detail h5 { font-size: 1.05rem; }
+}
+</style>
+
+{% if not tailor_only %}
 <!-- Modal editar pedido -->
 <div class="modal fade" id="editOrderModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
@@ -219,6 +309,15 @@
               </div>
             </div>
           </div>
+          <div class="mt-2">
+            <label class="form-label">Asignar a costurera</label>
+            <select name="assigned_to" class="form-select">
+              <option value="">Sin asignar</option>
+              {% for val, label in tailor_users %}
+              <option value="{{ val }}" {% if pedido.assigned_to == val %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
           <div class="mt-3">
             <label class="form-label">Observaciones</label>
             <textarea class="form-control" name="observations" rows="3">{{ pedido.observations or '' }}</textarea>
@@ -232,14 +331,53 @@
     </div>
   </div>
 </div>
+{% endif %}
+
+{% if not tailor_only %}
+<!-- Modal asignar taller -->
+<div class="modal fade" id="assignWorkshopModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="assignWorkshopForm">
+        <div class="modal-header">
+          <h5 class="modal-title">Asignar a taller</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-2">Prenda: <strong id="assign_garment_label"></strong></p>
+          <div class="mb-3">
+            <label class="form-label">Taller</label>
+            <select class="form-select" id="assign_workshop_id" required>
+              <option value="">Selecciona taller</option>
+              {% for w in workshops %}
+              <option value="{{ w.id }}">{{ w.name }}{% if w.phone %} ({{ w.phone }}){% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Fecha de entrega a tienda</label>
+            <input type="date" class="form-control" id="assign_due_date" min="{{ assign_min_date }}" {% if assign_max_date %}max="{{ assign_max_date }}"{% endif %}>
+            <div class="form-text">Se registran fecha y hora de asignacion automaticamente.</div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Asignar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Modal editar prenda -->
 <div class="modal fade" id="editItemModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg">
     <div class="modal-content">
       <form method="post" id="editItemForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="modal-header">
-          <h5 class="modal-title">Editar prenda</h5>
+          <h5 class="modal-title" id="editItemModalLabel">Editar prenda</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
         </div>
         <div class="modal-body">
@@ -255,7 +393,7 @@
             </div>
           </div>
           <div class="row g-3 mt-3" id="editMeasurements">
-            {% for field in ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado'] %}
+            {% for field in MEASUREMENT_FIELDS %}
             <div class="col-md-4 edit-measure" data-field="{{ field }}">
               <label class="form-label text-capitalize">{{ field.replace('_',' ') }}</label>
               <input type="text" class="form-control" name="{{ field }}" />
@@ -286,6 +424,7 @@
 {% block scripts %}
 <script>
 const garmentFields = {{ GARMENT_FIELDS|tojson }};
+const workshops = {{ workshops_json|tojson }};
 const editModal = document.getElementById('editItemModal');
 const editForm = document.getElementById('editItemForm');
 const editGarment = document.getElementById('edit_garment_type');
@@ -293,6 +432,9 @@ const editMeasures = document.querySelectorAll('.edit-measure');
 const editRefCheckbox = document.getElementById('edit_reference_from_garment');
 const editRefNotesBox = document.getElementById('editReferenceNotesBox');
 const editRefNotesInput = editRefNotesBox ? editRefNotesBox.querySelector('textarea') : null;
+const btnAddItemModal = document.getElementById('btnAddItemModal');
+const editItemModalLabel = document.getElementById('editItemModalLabel');
+const clientId = {{ pedido.client_id }};
 
 function toggleEditFields() {
     const tipo = editGarment.value;
@@ -312,11 +454,37 @@ function toggleEditReference() {
     if (!show && editRefNotesInput) editRefNotesInput.value = '';
 }
 
+if (btnAddItemModal) {
+    btnAddItemModal.addEventListener('click', () => {
+        if (editForm) {
+            editForm.action = `/admin/pedidos-personalizados/{{ pedido.id }}/items/nuevo`;
+        }
+        if (editItemModalLabel) editItemModalLabel.textContent = 'Agregar prenda';
+        const hiddenId = document.getElementById('edit_item_id');
+        if (hiddenId) hiddenId.value = '';
+        if (editGarment && editGarment.options.length) {
+            editGarment.value = editGarment.options[0].value;
+        }
+        toggleEditFields();
+        editMeasures.forEach(el => {
+            const input = el.querySelector('input');
+            if (input) input.value = '';
+        });
+        loadClientMeasures();
+        editRefCheckbox.checked = false;
+        if (editRefNotesInput) editRefNotesInput.value = '';
+        toggleEditReference();
+        const modal = new bootstrap.Modal(editModal);
+        modal.show();
+    });
+}
+
 document.querySelectorAll('.btn-edit-item').forEach(btn => {
     btn.addEventListener('click', () => {
         const itemId = btn.dataset.itemId;
         const garment = btn.dataset.garment;
         const measures = JSON.parse(btn.dataset.measures || '{}');
+        if (editItemModalLabel) editItemModalLabel.textContent = 'Editar prenda';
         editForm.action = `/admin/pedidos-personalizados/{{ pedido.id }}/items/${itemId}/editar`;
         document.getElementById('edit_item_id').value = itemId;
         editGarment.value = garment;
@@ -337,7 +505,136 @@ document.querySelectorAll('.btn-edit-item').forEach(btn => {
     });
 });
 
-editGarment.addEventListener('change', toggleEditFields);
 editRefCheckbox.addEventListener('change', toggleEditReference);
+
+async function loadClientMeasures() {
+    if (!clientId) return;
+    const tipo = editGarment.value;
+    try {
+        const res = await fetch(`/api/clientes/${clientId}/medidas?prenda=${encodeURIComponent(tipo)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        editMeasures.forEach(el => {
+            const key = el.dataset.field;
+            const input = el.querySelector('input');
+            if (input) input.value = data[key] || '';
+        });
+        toggleEditReference();
+    } catch (err) {
+        console.error('No se pudieron cargar medidas de cliente', err);
+    }
+}
+
+editGarment.addEventListener('change', () => {
+    const itemId = document.getElementById('edit_item_id')?.value;
+    if (!itemId) {
+        loadClientMeasures();
+    }
+    toggleEditFields();
+});
+
+// Asignacion a taller
+const assignButtons = document.querySelectorAll('.btn-assign-workshop');
+let currentAssignItem = null;
+assignButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        currentAssignItem = btn.dataset.itemId;
+        const modalEl = document.getElementById('assignWorkshopModal');
+        const select = document.getElementById('assign_workshop_id');
+        const dueInput = document.getElementById('assign_due_date');
+        const garmentLabel = document.getElementById('assign_garment_label');
+        garmentLabel.textContent = btn.dataset.garment || '';
+        select.value = btn.dataset.workshop || '';
+        dueInput.value = btn.dataset.due || '';
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    });
+});
+
+const assignForm = document.getElementById('assignWorkshopForm');
+if (assignForm) {
+    assignForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const select = document.getElementById('assign_workshop_id');
+        const dueInput = document.getElementById('assign_due_date');
+        const payload = {
+            workshop_id: select.value ? Number(select.value) : null,
+            due_date: dueInput.value || null
+        };
+        try {
+            const resp = await fetch(`/api/custom-orders/items/${currentAssignItem}/assign-workshop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': "{{ csrf_token() }}"
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                alert(data.error || 'No se pudo asignar la prenda.');
+                return;
+            }
+            window.location.reload();
+        } catch (err) {
+            alert('Error al asignar el taller.');
+        }
+    });
+}
+
+// Entregar prenda al cliente
+document.querySelectorAll('.btn-deliver-item').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const itemId = btn.dataset.itemId;
+        if (!confirm('¿Marcar esta prenda como entregada al cliente?')) return;
+        try {
+            const resp = await fetch(`/api/custom-orders/items/${itemId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': "{{ csrf_token() }}"
+                },
+                body: JSON.stringify({ status: 'entregado' })
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                alert(data.error || 'No se pudo actualizar.');
+                return;
+            }
+            window.location.reload();
+        } catch (err) {
+            alert('Error al actualizar entrega.');
+        }
+    });
+});
+
+// Cancelar asignacion
+document.querySelectorAll('.btn-cancel-workshop').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const itemId = btn.dataset.itemId;
+        if (!confirm('¿Cancelar la asignacion de esta prenda al taller?')) return;
+        try {
+            const resp = await fetch(`/api/custom-orders/items/${itemId}/assign-workshop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': "{{ csrf_token() }}"
+                },
+                body: JSON.stringify({
+                    workshop_id: null,
+                    due_date: null
+                })
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                alert(data.error || 'No se pudo cancelar la asignacion.');
+                return;
+            }
+            window.location.reload();
+        } catch (err) {
+            alert('Error al cancelar la asignacion.');
+        }
+    });
+});
 </script>
 {% endblock %}

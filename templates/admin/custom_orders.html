@@ -3,10 +3,11 @@
 {% block title %}Pedidos Personalizados - Modas Pathy{% endblock %}
 
 {% block content %}
+{% set status_options = tailor_statuses if tailor_only_flag else estados %}
 <div class="container-fluid py-4">
     <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
         <div>
-            <p class="text-muted mb-1 small">Gestión de pedidos personalizados</p>
+            <p class="text-muted mb-1 small">Gestion de pedidos personalizados</p>
             <h2 class="mb-1">Pedidos Personalizados</h2>
             <div class="d-flex align-items-center gap-2">
                 <span class="badge text-bg-danger">{{ urgentes_count }} urgente(s)</span>
@@ -20,15 +21,29 @@
             <button class="btn btn-outline-secondary" id="btnAgenda">
                 <i class="bi bi-calendar-event"></i> Agenda
             </button>
+            <a href="{{ url_for('admin_custom_orders_entregados') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-check2-circle"></i> Entregados
+            </a>
+            {% if current_user.is_superadmin and not tailor_only_flag %}
+            <a href="{{ url_for('admin_custom_orders_trash') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-trash"></i> Papelera
+            </a>
+            {% endif %}
+            {% if not tailor_only_flag %}
             <a href="{{ url_for('admin_custom_order_nuevo') }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle me-2"></i>Nuevo Pedido
             </a>
+            {% endif %}
         </div>
     </div>
 
     <div class="card shadow-sm border-0 mb-4" id="filtros">
         <div class="card-body">
             <form class="row g-3 align-items-end" method="get">
+                <div class="col-md-3">
+                    <label class="form-label">Buscar</label>
+                    <input type="text" class="form-control" name="q" placeholder="C&oacute;digo o cliente" value="{{ search_term }}">
+                </div>
                 <div class="col-md-3">
                     <label class="form-label">Cliente</label>
                     <select name="cliente" class="form-select">
@@ -53,7 +68,7 @@
                     <label class="form-label">Estado</label>
                     <select name="estado" class="form-select">
                         <option value="">Todos</option>
-                        {% for st in estados %}
+                        {% for st in status_options %}
                         <option value="{{ st }}" {% if filtro_estado == st %}selected{% endif %}>{{ estado_labels.get(st, st.title()) }}</option>
                         {% endfor %}
                     </select>
@@ -75,8 +90,8 @@
     <div class="alert alert-warning d-flex align-items-center gap-2">
         <i class="bi bi-exclamation-triangle-fill"></i>
         <div>
-            <div class="fw-semibold">Pedidos próximos a entrega</div>
-            <div class="small mb-0">{{ soon_orders|length }} pedido(s) vencen en 3 días o menos. Revisa la agenda.</div>
+            <div class="fw-semibold">Pedidos proximos a entrega</div>
+            <div class="small mb-0">{{ soon_orders|length }} pedido(s) vencen en 3 dias o menos. Revisa la agenda.</div>
         </div>
     </div>
     {% endif %}
@@ -87,13 +102,10 @@
                 <table class="table align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th>Código</th>
+                            <th>Codigo</th>
                             <th>Cliente</th>
                             <th>Prenda(s)</th>
-                            <th>Entrega</th>
-                            <th>Urgente</th>
                             <th>Estado</th>
-                            <th>Cambia estado</th>
                             <th>Total</th>
                             <th class="text-end">Acciones</th>
                         </tr>
@@ -112,7 +124,12 @@
                             {% endif %}
                         {% endif %}
                         <tr class="{{ row_class }}">
-                            <td class="fw-semibold">{{ p.code }}</td>
+                            <td class="fw-semibold">
+                                {{ p.code }}
+                                {% if p.is_urgent %}
+                                <span class="badge bg-danger-subtle text-danger ms-1"><i class="bi bi-lightning-charge-fill"></i> Urgente</span>
+                                {% endif %}
+                            </td>
                             <td>
                                 <div class="fw-semibold">{{ p.client.name }}</div>
                                 <div class="text-muted small">{{ p.client.phone }}</div>
@@ -129,40 +146,49 @@
                                     {{ p.garment_type }}
                                 {% endif %}
                             </td>
-                            <td>{{ p.delivery_date.strftime('%d/%m/%Y') if p.delivery_date else '-' }}</td>
                             <td>
-                                {% if p.is_urgent %}
-                                <span class="badge bg-danger">Urgente</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Normal</span>
-                                {% endif %}
-                            </td>
-                            <td><span class="badge bg-primary-subtle text-primary">{{ estado_labels.get(p.status, p.status.title()) }}</span></td>
-                            <td>
-                                <form method="post" action="{{ url_for('admin_custom_order_estado', order_id=p.id) }}" class="d-flex gap-2 align-items-center">
-                                    <select name="status" class="form-select form-select-sm">
-                                        {% for st in estados %}
-                                        <option value="{{ st }}" {% if p.status == st %}selected{% endif %}>{{ estado_labels.get(st, st.title()) }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button class="btn btn-sm btn-outline-success" type="submit"><i class="bi bi-check"></i></button>
-                                </form>
+                                {% set progress = (p.measurements or {}).get('_progress', {}) %}
+                                <div class="d-flex flex-column gap-1">
+                                    <span class="badge bg-primary-subtle text-primary d-inline-flex align-items-center gap-1">
+                                        <i class="bi bi-circle-half"></i>
+                                        {{ estado_labels.get(p.status, p.status.title()) }}
+                                        {% if p.status == 'en_confeccion' and progress %}
+                                            <span class="small">({{ progress.get('en_taller',0) }}/{{ progress.get('total',0) }})</span>
+                                        {% endif %}
+                                    </span>
+                                    {% if progress.get('listas',0) > 0 %}
+                                    <span class="badge bg-light text-dark">Listo {{ progress.get('listas',0) }}/{{ progress.get('total',0) }}</span>
+                                    {% endif %}
+                                    {% if p.delivery_date %}
+                                        {% set days_text = 'hoy' if days == 0 else 'manana' if days == 1 else 'vencido' if days is not none and days < 0 else 'en ' ~ days ~ ' d' %}
+                                        <div class="small {% if days is not none and days <= 1 %}text-danger{% else %}text-muted{% endif %}">
+                                            <i class="bi bi-calendar-event me-1"></i>{{ p.delivery_date.strftime('%d/%m/%Y') }} <span class="ms-1">{{ days_text }}</span>
+                                        </div>
+                                    {% else %}
+                                        <div class="small text-muted"><i class="bi bi-calendar-event me-1"></i>Sin fecha</div>
+                                    {% endif %}
+                                    {% if progress.get('total',0) %}
+                                        <div class="small text-muted"><i class="bi bi-check2-circle me-1"></i>{{ progress.get('listas',0) }}/{{ progress.get('total',0) }} prendas listas</div>
+                                    {% endif %}
+                                </div>
                             </td>
                             <td>Bs {{ '%.2f'|format(p.total) }}</td>
                             <td class="text-end">
                                 <a href="{{ url_for('admin_custom_order_detalle', order_id=p.id) }}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> Ver
                                 </a>
-                                <form method="post" action="{{ url_for('admin_custom_order_eliminar', order_id=p.id) }}" class="d-inline" onsubmit="return confirm('¿Eliminar el pedido {{ p.code }}?');">
+                                {% if not tailor_only_flag %}
+                                <form method="post" action="{{ url_for('admin_custom_order_eliminar', order_id=p.id) }}" class="d-inline" onsubmit="return confirm('Eliminar el pedido {{ p.code }}?');">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
                                         <i class="bi bi-trash"></i>
                                     </button>
                                 </form>
+                                {% endif %}
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="8" class="text-center py-4 text-muted">
+                            <td colspan="11" class="text-center py-4 text-muted">
                                 <i class="bi bi-inbox me-2"></i>No hay pedidos personalizados registrados.
                             </td>
                         </tr>
@@ -200,13 +226,14 @@
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <div>
                     <h5 class="mb-0">Agenda por fecha de entrega</h5>
-                    <small class="text-muted">Muestra los próximos pedidos con fecha asignada.</small>
+                    <small class="text-muted">Muestra los proximos pedidos con fecha asignada.</small>
                 </div>
             </div>
 
             {% if agenda_items %}
             {% set current_date = None %}
             {% for item in agenda_items %}
+                {% set days = (item.delivery_date - now_date).days if item.delivery_date else None %}
                 {% if current_date != item.delivery_date %}
                     {% set current_date = item.delivery_date %}
                     <div class="mt-3 mb-2">
@@ -220,11 +247,20 @@
                     <div class="d-flex flex-wrap justify-content-between gap-2">
                         <div>
                             <div class="fw-bold">{{ item.code }} - {{ item.garment_type }}</div>
-                            <div class="text-muted small">{{ item.client.name }} · {{ item.client.phone }}</div>
+                            <div class="text-muted small">{{ item.client.name }} | {{ item.client.phone }}</div>
                         </div>
                         <div class="d-flex align-items-center gap-2">
                             {% if item.is_urgent %}
                             <span class="badge bg-danger">Urgente</span>
+                            {% endif %}
+                            {% if days is not none %}
+                                {% if days < 0 %}
+                                <span class="badge bg-danger-subtle text-danger"><i class="bi bi-exclamation-octagon"></i> Vencido {{ days|abs }} d</span>
+                                {% elif days <= 2 %}
+                                <span class="badge bg-warning-subtle text-warning"><i class="bi bi-alarm"></i> En {{ days }} d</span>
+                                {% else %}
+                                <span class="badge text-bg-light border"><i class="bi bi-calendar-event"></i> En {{ days }} d</span>
+                                {% endif %}
                             {% endif %}
                             <span class="badge bg-primary-subtle text-primary">{{ estado_labels.get(item.status, item.status.title()) }}</span>
                             <span class="badge text-bg-light border">Bs {{ '%.2f'|format(item.total) }}</span>
@@ -254,6 +290,7 @@ const tablaView = document.getElementById('tablaView');
 const agendaView = document.getElementById('agendaView');
 const btnTabla = document.getElementById('btnTabla');
 const btnAgenda = document.getElementById('btnAgenda');
+const STORAGE_KEY = 'mp_custom_orders_view';
 
 function toggleView(showAgenda) {
     if (showAgenda) {
@@ -271,10 +308,14 @@ function toggleView(showAgenda) {
         btnAgenda.classList.add('btn-outline-secondary');
         btnAgenda.classList.remove('btn-primary');
     }
+    try {
+        localStorage.setItem(STORAGE_KEY, showAgenda ? 'agenda' : 'tabla');
+    } catch (e) {}
 }
 
 btnTabla.addEventListener('click', () => toggleView(false));
 btnAgenda.addEventListener('click', () => toggleView(true));
-toggleView(false);
+const storedView = (typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY)) || 'tabla';
+toggleView(storedView === 'agenda');
 </script>
 {% endblock %}

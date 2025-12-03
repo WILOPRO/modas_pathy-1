@@ -1,27 +1,31 @@
-{% extends 'admin/base_admin.html' %}
+﻿{% extends 'admin/base_admin.html' %}
 
-{% block title %}Usuarios — Modas Pathy{% endblock %}
+{% block title %}Usuarios - Modas Pathy{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="page-title">Administradores</h1>
+        <div>
+            <p class="text-muted small mb-1">Gestion de administradores</p>
+            <h1 class="page-title">Administradores</h1>
+        </div>
         <a href="{{ url_for('admin_usuario_nuevo') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-2"></i>Nuevo Usuario
         </a>
     </div>
 
-    <div class="card">
+    <div class="card shadow-sm">
         <div class="card-body p-0">
             {% if usuarios %}
             <div class="table-responsive">
-                <table class="table mb-0">
-                    <thead>
+                <table class="table mb-0 align-middle">
+                    <thead class="table-light">
                         <tr>
                             <th>Usuario</th>
                             <th>Nombre</th>
                             <th>Rol</th>
-                            <th>Último acceso</th>
+                            <th>Permisos</th>
+                            <th>Ultimo acceso</th>
                             <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
@@ -30,13 +34,12 @@
                         <tr>
                             <td>
                                 <div class="d-flex align-items-center gap-2">
-                                    <img src="{% if user.profile_image %}{{ url_for('static', filename='perfiles/' ~ user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}" 
-                                         class="rounded-circle"
-                                         style="width: 36px; height: 36px; object-fit: cover;">
+                                    <img src="{% if user.profile_image %}{{ url_for('static', filename='perfiles/' ~ user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}"
+                                         class="rounded-circle" style="width: 36px; height: 36px; object-fit: cover;">
                                     <span>@{{ user.username }}</span>
                                 </div>
                             </td>
-                            <td>{{ user.name or '—' }}</td>
+                            <td>{{ user.name or '-' }}</td>
                             <td>
                                 {% if user.is_superadmin %}
                                 <span class="badge bg-danger">Super Admin</span>
@@ -44,24 +47,32 @@
                                 <span class="badge bg-secondary">Admin</span>
                                 {% endif %}
                             </td>
+                            <td class="small">
+                                {% if user.is_superadmin %}
+                                    Todos
+                                {% else %}
+                                    {% set perms = user.permissions or [] %}
+                                    {% if perms %}
+                                        {{ perms|permission_labels|join(', ') }}
+                                    {% else %}
+                                        <span class="text-muted">Sin permisos</span>
+                                    {% endif %}
+                                {% endif %}
+                            </td>
                             <td>
                                 {% if user.last_login %}
-                                {{ user.last_login.strftime('%d/%m/%Y %H:%M') }}
+                                    {{ user.last_login.strftime('%d/%m/%Y %H:%M') }}
                                 {% else %}
-                                Nunca
+                                    Nunca
                                 {% endif %}
                             </td>
                             <td>
                                 <div class="action-group justify-content-end">
-                                    <a href="{{ url_for('admin_usuario_editar', id=user.id) }}" 
-                                       class="btn-action btn-action-edit">
+                                    <a href="{{ url_for('admin_usuario_editar', id=user.id) }}" class="btn-action btn-action-edit">
                                         <i class="bi bi-pencil"></i>
                                     </a>
                                     {% if user.id != current_user.id %}
-                                    <form action="{{ url_for('admin_usuario_eliminar', id=user.id) }}" 
-                                          method="post" 
-                                          class="d-inline"
-                                          onsubmit="return confirm('¿Eliminar este usuario?');">
+                                    <form action="{{ url_for('admin_usuario_eliminar', id=user.id) }}" method="post" class="d-inline" onsubmit="return confirm('Eliminar este usuario?');">
                                         <button type="submit" class="btn-action btn-action-delete">
                                             <i class="bi bi-trash"></i>
                                         </button>

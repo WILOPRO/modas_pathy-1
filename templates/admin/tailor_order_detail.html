@@ -1,0 +1,135 @@
+﻿{% extends 'admin/base_admin.html' %}
+{% block title %}Pedido asignado {{ pedido.code }}{% endblock %}
+{% block content %}
+<div class="container-fluid py-4 compact-detail">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <div>
+            <p class="text-muted small mb-1">Pedido asignado a tu taller</p>
+            <h2 class="mb-0">Pedido {{ pedido.code }}</h2>
+        </div>
+        <div class="d-flex gap-2">
+            {% set can_receive = pedido.status == 'pendiente' %}
+            {% set can_deliver = pedido.status in ['en_confeccion', 'listo'] %}
+            <form method="post" action="{{ url_for('admin_custom_order_estado', order_id=pedido.id) }}">
+                <input type="hidden" name="status" value="en_confeccion">
+                <button class="btn btn-outline-primary btn-sm" type="submit" {% if not can_receive %}disabled{% endif %}>Recibido</button>
+            </form>
+            <form method="post" action="{{ url_for('admin_custom_order_estado', order_id=pedido.id) }}">
+                <input type="hidden" name="status" value="entregado">
+                <button class="btn btn-success btn-sm" type="submit" {% if not can_deliver %}disabled{% endif %}>Entregado</button>
+            </form>
+            <a href="{{ url_for('admin_tailor_orders') }}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Volver</a>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-4">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Cliente</h5>
+                    <p class="mb-1 fw-semibold">{{ pedido.client.name }}</p>
+                    <p class="text-muted mb-0"><i class="bi bi-telephone me-1"></i>{{ pedido.client.phone }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card shadow-sm border-0 mb-2">
+                <div class="card-body">
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <span class="badge bg-primary-subtle text-primary">{{ estado_labels.get(pedido.status, pedido.status.title()) }}</span>
+                        <span class="small"><strong>Urgente:</strong> {{ 'Sí' if pedido.is_urgent else 'No' }}</span>
+                        <span class="small"><strong>Asignado:</strong> {{ pedido.assigned_user.name or pedido.assigned_user.username if pedido.assigned_user else 'Sin asignar' }}</span>
+                        <span class="small"><strong>Total:</strong> Bs {{ '%.2f'|format(pedido.total or 0) }}</span>
+                    </div>
+                    <p class="mb-1"><strong>Prenda principal:</strong> {{ pedido.garment_type }}</p>
+                    <p class="mb-2"><strong>Observaciones:</strong> {{ pedido.observations or 'N/A' }}</p>
+                </div>
+            </div>
+            <div class="card shadow-sm border-0 mb-2">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="fw-bold mb-0">Prendas en este pedido</h5>
+                        <span class="badge text-bg-light border">{{ pedido.items.count() }} prenda(s)</span>
+                    </div>
+                    {% if pedido.items.count() %}
+                    <div class="row g-1 align-items-center">
+                        {% for item in pedido.items %}
+                        <div class="col-md-6">
+                            <div class="border rounded p-2 h-100">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <div class="fw-semibold">{{ item.garment_type }}</div>
+                                        <div class="text-muted small">{{ item.created_at.strftime('%d/%m/%Y') }}</div>
+                                    </div>
+                                </div>
+                                {% set item_measures = item.measurements or {} %}
+                                {% if item_measures %}
+                                <div class="row g-1">
+                                    {% for k,v in item_measures.items() if k not in ['referencia_prenda','nota_referencia','_history'] %}
+                                    <div class="col-6 d-flex justify-content-between align-items-center small text-muted">
+                                        <span class="text-uppercase">{{ k.replace('_',' ') }}</span>
+                                        <span class="fw-semibold text-dark ms-1">{{ v }}</span>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if item_measures.get('referencia_prenda') %}
+                                <div class="alert alert-info mt-2 py-1 px-2 mb-0">
+                                    <div class="small fw-semibold mb-0">Prenda de referencia</div>
+                                    <div class="small mb-0">{{ item_measures.get('nota_referencia','Usar como guía') }}</div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Aún no hay prendas registradas.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card shadow-sm border-0 mb-2">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Imágenes</h5>
+                    {% if pedido.images.count() %}
+                    <div class="row g-2">
+                        {% for img in pedido.images.all() %}
+                        <div class="col-6 col-md-4">
+                            <div class="ratio ratio-1x1 rounded overflow-hidden border">
+                                <img src="{{ url_for('static', filename='custom_orders/' ~ img.filename) }}" alt="img" class="w-100 h-100" style="object-fit: cover;">
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0">Sin imágenes adjuntas.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h5 class="fw-bold mb-3">Historial</h5>
+                    {% if history %}
+                    <ul class="list-group list-group-flush">
+                        {% for h in history|reverse %}
+                        <li class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-semibold">{{ estado_labels.get(h.estado, h.estado|title) }}</div>
+                                    {% if h.nota %}<div class="text-muted small">{{ h.nota }}</div>{% endif %}
+                                    <div class="text-muted small">Por: {{ h.usuario or 'sistema' }}</div>
+                                </div>
+                                <div class="text-muted small"><i class="bi bi-clock-history me-1"></i>{{ h.fecha }}</div>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted mb-0">Sin historial registrado.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

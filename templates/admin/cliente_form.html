@@ -28,6 +28,10 @@
                         {{ form.phone(class="form-control") }}
                     </div>
                     <div class="col-md-6">
+                        <label class="form-label">Carnet o NIT (opcional)</label>
+                        {{ form.id_number(class="form-control") }}
+                    </div>
+                    <div class="col-md-6">
                         <label class="form-label">Tipo de prenda para medidas</label>
                         {{ form.garment_type(class="form-select", id="garment_type") }}
                     </div>
@@ -36,10 +40,15 @@
                 <div class="mt-4">
                     <h5 class="fw-bold mb-3">Medidas</h5>
                     <div class="row g-3" id="measurements">
-                        {% for field in ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado'] %}
+                        {% for field in ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','cadera','talla','quebrado','numero_torsales','metros','color'] %}
+                        {% set is_color = field == 'color' %}
                         <div class="col-md-4 measure-field" data-field="{{ field }}">
                             <label class="form-label text-capitalize">{{ field.replace('_',' ') }}</label>
-                            {{ getattr(form, field)(class="form-control") }}
+                            {% if is_color %}
+                                {{ getattr(form, field)(class="form-control") }}
+                            {% else %}
+                                {{ getattr(form, field)(class="form-control", inputmode="decimal", pattern="^[0-9]+([\\.,][0-9]+)?$") }}
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>

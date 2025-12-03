@@ -1,0 +1,115 @@
+{% extends 'admin/base_admin.html' %}
+{% block title %}Asignacion a taller - Modas Pathy{% endblock %}
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
+        <div>
+            <p class="text-muted mb-1 small">Asigna pedidos a costureras</p>
+            <h2 class="mb-1">Asignacion a taller</h2>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge text-bg-light border">Define asignado el y entrega a tienda</span>
+            </div>
+        </div>
+        <form class="d-flex gap-2" method="get">
+            <select name="estado" class="form-select">
+                <option value="">Todos</option>
+                {% for st in estados %}
+                <option value="{{ st }}" {% if estado == st %}selected{% endif %}>{{ estado_labels.get(st, st.title()) }}</option>
+                {% endfor %}
+            </select>
+            <button class="btn btn-primary" type="submit"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+        </form>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Codigo</th>
+                            <th>Cliente</th>
+                            <th>Prenda(s)</th>
+                            <th>Estado</th>
+                            <th>Asignado a</th>
+                            <th>Asignado el</th>
+                            <th>Entrega a tienda</th>
+                            <th class="text-end">Accion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in pedidos %}
+                        <tr>
+                            <td class="fw-semibold">
+                                <form id="assign-{{ p.id }}" method="post" action="{{ url_for('admin_taller_asignar', page=pagination.page, estado=estado) }}">
+                                    <input type="hidden" name="order_id" value="{{ p.id }}">
+                                </form>
+                                {{ p.code }}
+                            </td>
+                            <td>
+                                <div class="fw-semibold">{{ p.client.name }}</div>
+                                <div class="text-muted small">{{ p.client.phone }}</div>
+                            </td>
+                            <td>
+                                {% set item_count = p.items.count() %}
+                                {% if item_count > 0 %}
+                                    {% set first_item = p.items.first() %}
+                                    {{ first_item.garment_type }}
+                                    {% if item_count > 1 %}
+                                        <span class="badge text-bg-light border ms-1">+{{ item_count - 1 }} prenda(s)</span>
+                                    {% endif %}
+                                {% else %}
+                                    {{ p.garment_type }}
+                                {% endif %}
+                            </td>
+                            <td><span class="badge bg-primary-subtle text-primary">{{ estado_labels.get(p.status, p.status.title()) }}</span></td>
+                            <td>
+                                <select name="assigned_to" class="form-select form-select-sm" form="assign-{{ p.id }}">
+                                    {% for val, label in costureras %}
+                                    <option value="{{ val }}" {% if p.assigned_to == val %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <input type="date" name="assigned_at" class="form-control form-control-sm" value="{{ p.assigned_at.strftime('%Y-%m-%d') if p.assigned_at else '' }}" form="assign-{{ p.id }}">
+                            </td>
+                            <td>
+                                <input type="date" name="shop_due_date" class="form-control form-control-sm" value="{{ p.shop_due_date.strftime('%Y-%m-%d') if p.shop_due_date else '' }}" form="assign-{{ p.id }}">
+                            </td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-primary" type="submit" form="assign-{{ p.id }}">Guardar</button>
+                                <a href="{{ url_for('admin_custom_order_detalle', order_id=p.id) }}" class="btn btn-sm btn-outline-secondary ms-1">Ver</a>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="text-center py-4 text-muted">
+                                <i class="bi bi-inbox me-2"></i>No hay pedidos para asignar.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if pagination and pagination.pages > 1 %}
+            <div class="p-3 border-top">
+                <ul class="pagination mb-0 justify-content-center">
+                    <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_taller_asignar', page=pagination.prev_num, estado=estado) }}">&laquo;</a>
+                    </li>
+                    {% for p in range(1, pagination.pages + 1) %}
+                    <li class="page-item {% if p == pagination.page %}active{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_taller_asignar', page=p, estado=estado) }}">{{ p }}</a>
+                    </li>
+                    {% endfor %}
+                    <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                        <a class="page-link" href="{{ url_for('admin_taller_asignar', page=pagination.next_num, estado=estado) }}">&raquo;</a>
+                    </li>
+                </ul>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

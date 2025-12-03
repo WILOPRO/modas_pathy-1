@@ -1,4 +1,4 @@
-"""
+﻿"""
 Modas Pathy - Tienda Virtual
 Versión 2.0 - Código refactorizado y optimizado
 """
@@ -9,6 +9,7 @@ import random
 import requests
 from datetime import datetime, timedelta
 from functools import wraps
+from urllib.parse import quote
 
 from flask import (
     Flask, render_template, redirect, url_for, flash,
@@ -21,9 +22,11 @@ from flask_login import (
 )
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileAllowed, MultipleFileField, FileField
+from flask_wtf.csrf import generate_csrf
 from wtforms import (
     StringField, PasswordField, SubmitField, FloatField,
-    TextAreaField, SelectField, BooleanField, DateField, HiddenField
+    TextAreaField, SelectField, BooleanField, DateField, HiddenField,
+    SelectMultipleField
 )
 from wtforms.validators import (
     DataRequired, InputRequired, Length, Optional, EqualTo, Regexp, NumberRange
@@ -31,7 +34,7 @@ from wtforms.validators import (
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from werkzeug.exceptions import RequestEntityTooLarge
-from sqlalchemy import or_, JSON
+from sqlalchemy import or_, JSON, func, text, inspect
 from sqlalchemy.orm.attributes import flag_modified
 
 from config import config
@@ -59,6 +62,142 @@ ALLOWED_EXTENSIONS = app.config.get('ALLOWED_EXTENSIONS', {'png', 'jpg', 'jpeg',
 for folder in (UPLOAD_FOLDER, PROFILE_FOLDER, QR_FOLDER, CUSTOM_ORDER_FOLDER):
     os.makedirs(folder, exist_ok=True)
 
+def ensure_client_schema():
+    """Garantiza columnas opcionales en la tabla de clientes (p. ej. carnet/NIT)."""
+    try:
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        if 'clients' not in tables:
+            return
+        columns = {col['name'] for col in inspector.get_columns('clients')}
+        if 'id_number' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE clients ADD COLUMN id_number VARCHAR(64)'))
+        if 'is_deleted' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE clients ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+        if 'deleted_at' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE clients ADD COLUMN deleted_at DATETIME'))
+        if 'deleted_by' not in columns:
+            with db.engine.begin() as conn:
+                conn.execute(text('ALTER TABLE clients ADD COLUMN deleted_by VARCHAR(64)'))
+    except Exception as exc:
+        try:
+            app.logger.warning('No se pudo verificar/actualizar esquema de clientes: %s', exc)
+        except Exception:
+            print(f'No se pudo verificar/actualizar esquema de clientes: {exc}')
+
+def ensure_user_permissions_schema():
+    """Crea/ajusta columnas de permisos y tabla de historial."""
+    try:
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        if 'users' in tables:
+            columns = {col['name'] for col in inspector.get_columns('users')}
+            if 'permissions' not in columns:
+                with db.engine.begin() as conn:
+                    conn.execute(text('ALTER TABLE users ADD COLUMN permissions TEXT'))
+        if 'user_permission_logs' not in tables:
+            with db.engine.begin() as conn:
+                conn.execute(text(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_permission_logs (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id INTEGER NOT NULL,
+                        changed_by VARCHAR(64) NOT NULL,
+                        permissions_before TEXT,
+                        permissions_after TEXT,
+                        note VARCHAR(256),
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY(user_id) REFERENCES users(id)
+                    )
+                    """
+                ))
+    except Exception as exc:
+        try:
+            app.logger.warning('No se pudo verificar/actualizar esquema de usuarios: %s', exc)
+        except Exception:
+            print(f'No se pudo verificar/actualizar esquema de usuarios: {exc}')
+
+def ensure_custom_order_schema():
+    """Ajusta columnas de papelera en pedidos."""
+    try:
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        if 'custom_orders' not in tables:
+            return
+        columns = {col['name'] for col in inspector.get_columns('custom_orders')}
+        with db.engine.begin() as conn:
+            if 'is_deleted' not in columns:
+                conn.execute(text('ALTER TABLE custom_orders ADD COLUMN is_deleted BOOLEAN DEFAULT 0'))
+            if 'deleted_at' not in columns:
+                conn.execute(text('ALTER TABLE custom_orders ADD COLUMN deleted_at DATETIME'))
+            if 'deleted_by' not in columns:
+                conn.execute(text('ALTER TABLE custom_orders ADD COLUMN deleted_by VARCHAR(64)'))
+            if 'assigned_to' not in columns:
+                conn.execute(text('ALTER TABLE custom_orders ADD COLUMN assigned_to INTEGER'))
+            if 'assigned_at' not in columns:
+                conn.execute(text('ALTER TABLE custom_orders ADD COLUMN assigned_at DATETIME'))
+            if 'shop_due_date' not in columns:
+                conn.execute(text('ALTER TABLE custom_orders ADD COLUMN shop_due_date DATE'))
+    except Exception as exc:
+        try:
+            app.logger.warning('No se pudo verificar/actualizar esquema de pedidos: %s', exc)
+        except Exception:
+            print(f'No se pudo verificar/actualizar esquema de pedidos: {exc}')
+
+def ensure_workshop_schema():
+    """Crea tabla de talleres y columnas de asignacion por prenda si faltan."""
+    try:
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        with db.engine.begin() as conn:
+            if 'workshops' not in tables:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS workshops (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        name VARCHAR(120) NOT NULL,
+                        phone VARCHAR(32),
+                        is_active BOOLEAN DEFAULT 1,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+            if 'custom_order_items' in tables:
+                item_cols = {col['name'] for col in inspector.get_columns('custom_order_items')}
+                if 'workshop_id' not in item_cols:
+                    conn.execute(text('ALTER TABLE custom_order_items ADD COLUMN workshop_id INTEGER'))
+                if 'workshop_status' not in item_cols:
+                    conn.execute(text("ALTER TABLE custom_order_items ADD COLUMN workshop_status VARCHAR(30)"))
+                if 'workshop_assigned_at' not in item_cols:
+                    conn.execute(text("ALTER TABLE custom_order_items ADD COLUMN workshop_assigned_at DATETIME"))
+                if 'workshop_due_date' not in item_cols:
+                    conn.execute(text("ALTER TABLE custom_order_items ADD COLUMN workshop_due_date DATE"))
+                if 'workshop_returned_at' not in item_cols:
+                    conn.execute(text("ALTER TABLE custom_order_items ADD COLUMN workshop_returned_at DATETIME"))
+                conn.execute(text("""
+                    UPDATE custom_order_items
+                    SET workshop_status = COALESCE(workshop_status, 'pendiente')
+                    WHERE workshop_status IS NULL
+                """))
+            if 'custom_orders' in tables:
+                order_cols = {col['name'] for col in inspector.get_columns('custom_orders')}
+                if 'delivered_at' not in order_cols:
+                    conn.execute(text("ALTER TABLE custom_orders ADD COLUMN delivered_at DATETIME"))
+    except Exception as exc:
+        try:
+            app.logger.warning('No se pudo verificar/actualizar esquema de talleres: %s', exc)
+        except Exception:
+            print(f'No se pudo verificar/actualizar esquema de talleres: {exc}')
+
+# Intentar ajustar el esquema al iniciar la aplicacion
+with app.app_context():
+    ensure_client_schema()
+    ensure_user_permissions_schema()
+    ensure_custom_order_schema()
+    ensure_workshop_schema()
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 #                              MODELOS
@@ -74,8 +213,10 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(256), nullable=False)
     is_superadmin = db.Column(db.Boolean, default=False)
     profile_image = db.Column(db.String(256))
+    permissions = db.Column(JSON, default=list)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
+    permission_logs = db.relationship('UserPermissionLog', back_populates='user', cascade='all, delete-orphan')
     
     def set_password(self, password):
         self.password = generate_password_hash(password)
@@ -209,8 +350,12 @@ class Client(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False)
-    phone = db.Column(db.String(32), nullable=False, index=True)
+    phone = db.Column(db.String(32), index=True)
+    id_number = db.Column(db.String(64))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, default=False, index=True)
+    deleted_at = db.Column(db.DateTime)
+    deleted_by = db.Column(db.String(64))
     measurements = db.Column(JSON, default=dict)  # Medidas por tipo de prenda
     
     custom_orders = db.relationship('CustomOrder', back_populates='client', cascade='all, delete-orphan')
@@ -234,10 +379,18 @@ class CustomOrder(db.Model):
     is_urgent = db.Column(db.Boolean, default=False)
     status = db.Column(db.String(30), default='pendiente')
     measurements = db.Column(JSON, default=dict)
+    assigned_to = db.Column(db.Integer, db.ForeignKey('users.id'))
+    assigned_at = db.Column(db.DateTime)
+    shop_due_date = db.Column(db.Date)
+    delivered_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_deleted = db.Column(db.Boolean, default=False, index=True)
+    deleted_at = db.Column(db.DateTime)
+    deleted_by = db.Column(db.String(64))
     
     client = db.relationship('Client', back_populates='custom_orders')
+    assigned_user = db.relationship('User', foreign_keys=[assigned_to])
     images = db.relationship('CustomOrderImage', backref='order', cascade='all, delete-orphan', lazy='dynamic')
     items = db.relationship('CustomOrderItem', backref='order', cascade='all, delete-orphan', lazy='dynamic')
 
@@ -254,6 +407,22 @@ class CustomOrderImage(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey('custom_orders.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class Workshop(db.Model):
+    """Taller externo/offline para asignar prendas."""
+    __tablename__ = 'workshops'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False, unique=True, index=True)
+    phone = db.Column(db.String(32))
+    is_active = db.Column(db.Boolean, default=True, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    items = db.relationship('CustomOrderItem', back_populates='workshop', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<Workshop {self.name}>'
+
 
 class CustomOrderItem(db.Model):
     """Prendas asociadas a un pedido personalizado"""
@@ -263,7 +432,14 @@ class CustomOrderItem(db.Model):
     order_id = db.Column(db.Integer, db.ForeignKey('custom_orders.id'), nullable=False, index=True)
     garment_type = db.Column(db.String(40), nullable=False)
     measurements = db.Column(JSON, default=dict)
+    workshop_id = db.Column(db.Integer, db.ForeignKey('workshops.id'))
+    workshop_status = db.Column(db.String(30), default='pendiente')
+    workshop_assigned_at = db.Column(db.DateTime)
+    workshop_due_date = db.Column(db.Date)
+    workshop_returned_at = db.Column(db.DateTime)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    workshop = db.relationship('Workshop', back_populates='items')
 
 
 class Theme(db.Model):
@@ -319,6 +495,20 @@ class Notification(db.Model):
     def __repr__(self):
         return f'<Notification {self.message[:30]}>'
 
+class UserPermissionLog(db.Model):
+    """Historial de cambios de permisos por usuario."""
+    __tablename__ = 'user_permission_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    changed_by = db.Column(db.String(64), nullable=False)
+    permissions_before = db.Column(JSON, default=list)
+    permissions_after = db.Column(JSON, default=list)
+    note = db.Column(db.String(256))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', back_populates='permission_logs')
+
 
 class SiteSettings(db.Model):
     """Configuración general del sitio"""
@@ -359,39 +549,57 @@ CUSTOM_ORDER_TYPES = [
 
 CUSTOM_ORDER_STATUSES = [
     'pendiente',
-    'diseno',
-    'corte',
-    'confeccion',
-    'prueba',
-    'ajustes',
+    'en_confeccion',
     'listo',
-    'entregado',
-    'en proceso'  # Compatibilidad con estados anteriores
+    'entregado'
 ]
 
 CUSTOM_ORDER_STATUS_LABELS = {
     'pendiente': 'Pendiente',
-    'diseno': 'En diseño',
-    'corte': 'En corte',
-    'confeccion': 'En confección',
-    'prueba': 'En prueba',
-    'ajustes': 'Ajustes',
+    'en_confeccion': 'En confeccion',
     'listo': 'Listo',
-    'entregado': 'Entregado',
-    'en proceso': 'En proceso'
+    'entregado': 'Entregado'
 }
 
-# Campos de medidas por tipo
+TAILOR_ALLOWED_STATUSES = {'pendiente', 'en_confeccion', 'listo', 'entregado'}
+
+STATUS_FLOW = ['pendiente', 'en_confeccion', 'listo', 'entregado']
+
+WORKSHOP_ITEM_STATUSES = ['pendiente', 'asignado', 'recibido', 'listo', 'entregado', 'cancelado']
+WORKSHOP_ITEM_STATUS_LABELS = {
+    'pendiente': 'Sin asignar',
+    'asignado': 'Entregado a taller',
+    'recibido': 'Recibido de taller',
+    'listo': 'Listo para entrega',
+    'entregado': 'Entregado al cliente',
+    'cancelado': 'Cancelado'
+}
+
 GARMENT_FIELDS = {
     'Blusa Cochala': ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura'],
     'Blusa Sucrena': ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura'],
     'Pollera Cochala': ['cintura','alforza','panos','wato','corridas','color'],
-    'Pollera Sucrena': ['cintura','cadera','talla','panos','quebrado','wato','color','figura'],
-    'Centro Cochala': ['cintura','talla'],
-    'Centro Sucrena': ['cintura','cadera','quebrado','talla']
+    'Pollera Sucrena': ['cintura','cadera','talla','panos','quebrado','wato','figura','numero_torsales','color'],
+    'Centro Cochala': ['cintura','talla','metros','color'],
+    'Centro Sucrena': ['cintura','cadera','quebrado','talla','metros','color']
 }
 
+MEASUREMENT_FIELDS = [
+    'largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno',
+    'cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla',
+    'quebrado','numero_torsales','metros'
+]
+
 HEX_COLOR = Regexp(r'^#(?:[0-9a-fA-F]{3}){1,2}$', message='Debe ser un color hex valido')
+
+PERMISSION_CHOICES = [
+    ('manage_products', 'Productos y categorias'),
+    ('manage_orders', 'Pedidos rapidos'),
+    ('manage_custom_orders', 'Pedidos personalizados'),
+    ('manage_clients', 'Clientes'),
+    ('manage_themes', 'Temas y apariencia'),
+    ('manage_settings', 'Configuracion general')
+]
 
 class LoginForm(FlaskForm):
     username = StringField('Usuario', validators=[DataRequired(message='El usuario es requerido')])
@@ -434,6 +642,7 @@ class UserForm(FlaskForm):
     password2 = PasswordField('Confirmar Contrasena', validators=[Optional(), EqualTo('password', 'Las contrasenas no coinciden')])
     is_superadmin = SelectField('Rol', choices=[('0', 'Administrador'), ('1', 'Super Administrador')])
     profile_image = FileField('Foto de perfil', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas'), Optional()])
+    permissions = SelectMultipleField('Permisos', choices=PERMISSION_CHOICES, validators=[Optional()])
     submit = SubmitField('Guardar')
 
 class ProfileForm(FlaskForm):
@@ -483,8 +692,10 @@ class CustomOrderForm(FlaskForm):
     client_id = SelectField('Cliente', coerce=int, validators=[InputRequired()])
     new_client_name = StringField('Nombre de cliente', validators=[Optional(), Length(max=128)])
     new_client_phone = StringField('Telefono', validators=[Optional(), Length(max=32)])
+    new_client_id_number = StringField('Carnet/NIT', validators=[Optional(), Length(max=64)])
     garment_type = SelectField('Tipo de prenda', choices=[(t, t) for t in CUSTOM_ORDER_TYPES], validators=[DataRequired()])
     delivery_date = DateField('Fecha de entrega', validators=[DataRequired(message='Requerido')], format='%Y-%m-%d')
+    shop_due_date = DateField('Entrega a tienda', validators=[Optional()], format='%Y-%m-%d')
     deposit = FloatField('Monto de adelanto', validators=[Optional(), NumberRange(min=0)])
     total = FloatField('Total', validators=[DataRequired(), NumberRange(min=0)])
     observations = TextAreaField('Observaciones', validators=[Optional()])
@@ -496,6 +707,7 @@ class CustomOrderForm(FlaskForm):
         choices=[(s, CUSTOM_ORDER_STATUS_LABELS.get(s, s.title())) for s in CUSTOM_ORDER_STATUSES],
         validators=[DataRequired()]
     )
+    assigned_to = SelectField('Asignar a', coerce=int, validators=[Optional()], choices=[(0, 'Asignacion por prenda')])
     images = MultipleFileField('Imagenes', validators=[FileAllowed(ALLOWED_EXTENSIONS, 'Solo imagenes permitidas')])
     largo_espalda = StringField('Largo Espalda', validators=[Optional(), Length(max=50)])
     largo_delantero = StringField('Largo Delantero', validators=[Optional(), Length(max=50)])
@@ -514,10 +726,12 @@ class CustomOrderForm(FlaskForm):
     panos = StringField('Panos', validators=[Optional(), Length(max=50)])
     wato = StringField('Wato', validators=[Optional(), Length(max=50)])
     corridas = StringField('Corridas', validators=[Optional(), Length(max=50)])
-    color = StringField('Color', validators=[Optional(), Length(max=50)])
     cadera = StringField('Cadera', validators=[Optional(), Length(max=50)])
     talla = StringField('Talla', validators=[Optional(), Length(max=50)])
     quebrado = StringField('Quebrado', validators=[Optional(), Length(max=50)])
+    numero_torsales = StringField('Numero torsales', validators=[Optional(), Length(max=50)])
+    metros = StringField('Metros', validators=[Optional(), Length(max=50)])
+    color = StringField('Color', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Guardar pedido')
     items_json = HiddenField('Items')
 
@@ -544,15 +758,18 @@ class CustomOrderItemForm(FlaskForm):
     panos = StringField('Panos', validators=[Optional(), Length(max=50)])
     wato = StringField('Wato', validators=[Optional(), Length(max=50)])
     corridas = StringField('Corridas', validators=[Optional(), Length(max=50)])
-    color = StringField('Color', validators=[Optional(), Length(max=50)])
     cadera = StringField('Cadera', validators=[Optional(), Length(max=50)])
     talla = StringField('Talla', validators=[Optional(), Length(max=50)])
     quebrado = StringField('Quebrado', validators=[Optional(), Length(max=50)])
+    numero_torsales = StringField('Numero torsales', validators=[Optional(), Length(max=50)])
+    metros = StringField('Metros', validators=[Optional(), Length(max=50)])
+    color = StringField('Color', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Agregar prenda')
 
 class ClientForm(FlaskForm):
     name = StringField('Nombre', validators=[DataRequired(), Length(max=128)])
-    phone = StringField('Telefono', validators=[DataRequired(), Length(max=32)])
+    phone = StringField('Telefono', validators=[Optional(), Length(max=32)])
+    id_number = StringField('Carnet/NIT', validators=[Optional(), Length(max=64)])
     garment_type = SelectField('Tipo de prenda', choices=[(t, t) for t in CUSTOM_ORDER_TYPES])
     largo_espalda = StringField('Largo Espalda', validators=[Optional(), Length(max=50)])
     largo_delantero = StringField('Largo Delantero', validators=[Optional(), Length(max=50)])
@@ -571,10 +788,12 @@ class ClientForm(FlaskForm):
     panos = StringField('Panos', validators=[Optional(), Length(max=50)])
     wato = StringField('Wato', validators=[Optional(), Length(max=50)])
     corridas = StringField('Corridas', validators=[Optional(), Length(max=50)])
-    color = StringField('Color', validators=[Optional(), Length(max=50)])
     cadera = StringField('Cadera', validators=[Optional(), Length(max=50)])
     talla = StringField('Talla', validators=[Optional(), Length(max=50)])
     quebrado = StringField('Quebrado', validators=[Optional(), Length(max=50)])
+    numero_torsales = StringField('Numero torsales', validators=[Optional(), Length(max=50)])
+    metros = StringField('Metros', validators=[Optional(), Length(max=50)])
+    color = StringField('Color', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Guardar cliente')
 
 # -------------------------------------------------
@@ -665,7 +884,7 @@ def save_custom_order_images(files, order):
     return saved
 
 def extract_measurements_from_form(form):
-    fields = ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado']
+    fields = MEASUREMENT_FIELDS
     data = {}
     for f in fields:
         val = getattr(form, f).data if hasattr(form, f) else None
@@ -690,12 +909,18 @@ def append_custom_order_history(order, new_status, note='', user=None):
     history = data.get('_history', [])
     # Hora local Bolivia (UTC-4)
     now = datetime.utcnow() - timedelta(hours=4)
+    actor = user
+    if not actor:
+        if current_user and current_user.is_authenticated:
+            actor = current_user.name or current_user.username
+        else:
+            actor = 'sistema'
     history.append({
         'fecha': now.strftime('%Y-%m-%d %H:%M:%S (GMT-4)'),
         'fecha_iso': now.isoformat(),
         'estado': new_status,
         'nota': note or '',
-        'usuario': user or (current_user.username if current_user and current_user.is_authenticated else 'sistema')
+        'usuario': actor
     })
     data['_history'] = history
     order.measurements = data
@@ -709,6 +934,160 @@ def append_custom_order_history(order, new_status, note='', user=None):
 def get_custom_order_history(order):
     data = order.measurements or {}
     return data.get('_history', [])
+
+
+def normalize_phone(phone):
+    """Elimina caracteres no numericos para usar en wa.me."""
+    return re.sub(r'\D', '', phone or '')
+
+
+def build_workshop_message(item):
+    """Crea el texto a enviar al taller (sin precios)."""
+    order = item.order
+    taller_name = item.workshop.name if item.workshop else 'taller'
+    measurements = item.measurements or {}
+    talla = measurements.get('talla') or '-'
+    color = measurements.get('color') or '-'
+    detalles = measurements.get('nota_referencia') or order.observations or 'Sin detalles'
+    entrega = item.workshop_due_date or order.delivery_date
+    entrega_txt = entrega.strftime('%Y-%m-%d') if entrega else 'Sin fecha'
+    cliente = order.client.name if order and order.client else ''
+    lines = [
+        f"Hola {taller_name},",
+        "Te comparto la prenda asignada:",
+        "",
+        f"Pedido: {order.code}",
+        f"Cliente: {cliente}" if cliente else None,
+        f"Prenda: {item.garment_type}",
+        f"Talla: {talla}",
+        f"Color: {color}",
+        f"Detalles: {detalles}",
+        f"Fecha de entrega: {entrega_txt}",
+        "",
+        "Por favor confirma recepcion. �Gracias!"
+    ]
+    return '\n'.join([l for l in lines if l is not None])
+
+
+def build_workshop_whatsapp_link(item):
+    """Genera el link wa.me con el mensaje codificado."""
+    if not item or not item.workshop or not item.workshop.phone:
+        return None
+    phone = normalize_phone(item.workshop.phone)
+    if not phone:
+        return None
+    message = build_workshop_message(item)
+    return f"https://wa.me/{phone}?text={quote(message)}"
+
+
+def refresh_order_workshop_status(order):
+    """Ajusta estado global del pedido segun estados de prendas."""
+    if not order or order.is_deleted:
+        return
+    try:
+        items = order.items.all()
+    except Exception:
+        items = list(order.items or [])
+    if not items:
+        return
+    statuses = [i.workshop_status or 'pendiente' for i in items]
+    total = len(items)
+    en_taller_count = sum(1 for s in statuses if s == 'asignado')
+    assigned_any = sum(1 for s in statuses if s in ('asignado', 'recibido', 'listo', 'entregado'))
+    received_count = sum(1 for s in statuses if s in ('recibido', 'listo', 'entregado'))
+    ready_count = sum(1 for s in statuses if s in ('listo', 'entregado'))
+    delivered_count = sum(1 for s in statuses if s == 'entregado')
+    all_assigned = all((s in ('asignado', 'recibido', 'listo', 'entregado') and i.workshop_id) for s, i in zip(statuses, items))
+    all_received = all(s in ('recibido', 'listo', 'entregado') for s in statuses)
+    all_ready = all(s in ('listo', 'entregado') for s in statuses)
+    all_delivered = all(s == 'entregado' for s in statuses)
+
+    new_status = None
+    if all_delivered:
+        new_status = 'entregado'
+    elif all_ready:
+        new_status = 'listo'
+    elif all_received:
+        new_status = 'listo'
+    elif all_assigned:
+        new_status = 'en_confeccion'
+
+    if new_status and order.status != new_status:
+        append_custom_order_history(order, new_status, f'Estado auto: prendas -> {new_status}', user='sistema')
+        order.status = new_status
+    # Guardar resumen de progreso en measurements para uso en templates
+    data = order.measurements or {}
+    data['_progress'] = {
+        'total': total,
+        'en_taller': en_taller_count,
+        'asignadas': assigned_any,
+        'recibidas': received_count,
+        'listas': ready_count,
+        'entregadas': delivered_count
+    }
+    order.measurements = data
+    try:
+        flag_modified(order, 'measurements')
+    except Exception:
+        pass
+
+
+def serialize_workshop_item(item):
+    """Serializa una prenda con datos de taller para APIs."""
+    return {
+        'id': item.id,
+        'order_id': item.order_id,
+        'garment_type': item.garment_type,
+        'measurements': item.measurements or {},
+        'workshop_status': item.workshop_status or 'pendiente',
+        'workshop_assigned_at': item.workshop_assigned_at.isoformat() if item.workshop_assigned_at else None,
+        'workshop_due_date': item.workshop_due_date.isoformat() if item.workshop_due_date else None,
+        'workshop_returned_at': item.workshop_returned_at.isoformat() if item.workshop_returned_at else None,
+        'workshop': {
+            'id': item.workshop.id,
+            'name': item.workshop.name,
+            'phone': item.workshop.phone
+        } if item.workshop else None,
+        'whatsapp_link': build_workshop_whatsapp_link(item)
+    }
+
+
+def format_measure_diff(old, new):
+    """Genera texto breve de cambios entre medidas previas y nuevas."""
+    changes = []
+    keys = set((old or {}).keys()) | set((new or {}).keys())
+    for k in sorted(keys):
+        old_v = (old or {}).get(k)
+        new_v = (new or {}).get(k)
+        if old_v != new_v:
+            changes.append(f"{k}: {old_v or '-'} -> {new_v or '-'}")
+    return '; '.join(changes)
+
+
+def append_client_measurement_history(cliente, garment_type, before, after, user):
+    """Registra historial de cambios de medidas a nivel cliente."""
+    data = dict(cliente.measurements or {})
+    history = data.get('_history', [])
+    now = datetime.utcnow() - timedelta(hours=4)
+    actor = user
+    if not actor:
+        if current_user and current_user.is_authenticated:
+            actor = current_user.name or current_user.username
+        else:
+            actor = 'sistema'
+    history.append({
+        'fecha': now.strftime('%Y-%m-%d %H:%M:%S (GMT-4)'),
+        'garment_type': garment_type,
+        'changed_by': actor,
+        'antes': before or {},
+        'despues': after or {}
+    })
+    data['_history'] = history
+    cliente.measurements = data
+    try:
+        flag_modified(cliente, 'measurements')
+    except Exception:
+        pass
 
 def generate_order_code():
     year = datetime.utcnow().year
@@ -735,6 +1114,58 @@ def superadmin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+def has_permission(user, permission):
+    if not user:
+        return False
+    if getattr(user, 'is_superadmin', False):
+        return True
+    perms = user.permissions or []
+    return permission in perms
+
+def is_tailor_only(user):
+    """True si solo tiene permisos de costurera asignada (no admin completo)."""
+    return False
+
+def tailor_can_access_order(user, order):
+    if not user or not order:
+        return False
+    if getattr(user, 'is_superadmin', False) or has_permission(user, 'manage_custom_orders'):
+        return True
+    return False
+
+def permission_required(permission):
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if not current_user.is_authenticated:
+                abort(403)
+            if not has_permission(current_user, permission):
+                flash('No tienes permisos para realizar esta accion.', 'danger')
+                abort(403)
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+def record_permission_change(user, before, after, changed_by, note=None):
+    log = UserPermissionLog(
+        user_id=user.id,
+        changed_by=changed_by,
+        permissions_before=before or [],
+        permissions_after=after or [],
+        note=note or 'Actualizacion de permisos'
+    )
+    db.session.add(log)
+
+@app.template_filter('permission_labels')
+def permission_labels(perms):
+    """Convierte codigos de permiso en etiquetas legibles para templates."""
+    labels = dict(PERMISSION_CHOICES)
+    if not perms:
+        return []
+    try:
+        return [labels.get(p, p) for p in perms]
+    except TypeError:
+        return []
 # ═══════════════════════════════════════════════════════════════════════════
 
 @login_manager.user_loader
@@ -779,9 +1210,16 @@ def inject_globals():
         'paypal_percent_fee': app.config.get('PAYPAL_PERCENT_FEE', 0),
         'paypal_fixed_fee': app.config.get('PAYPAL_FIXED_FEE', 0),
         'GARMENT_FIELDS': GARMENT_FIELDS,
+        'MEASUREMENT_FIELDS': MEASUREMENT_FIELDS,
         'CUSTOM_ORDER_TYPES': CUSTOM_ORDER_TYPES,
         'CUSTOM_ORDER_STATUS_LABELS': CUSTOM_ORDER_STATUS_LABELS,
-        'getattr': getattr
+        'getattr': getattr,
+        'PERMISSION_CHOICES': PERMISSION_CHOICES,
+        'PERMISSION_LABELS': dict(PERMISSION_CHOICES),
+        'has_permission': has_permission,
+        'is_tailor_only': is_tailor_only,
+        'WORKSHOP_ITEM_STATUS_LABELS': WORKSHOP_ITEM_STATUS_LABELS,
+        'csrf_token': generate_csrf
     }
 
 
@@ -792,6 +1230,10 @@ def inject_globals():
 def init_db():
     """Inicializa la base de datos con datos por defecto"""
     db.create_all()
+    ensure_client_schema()
+    ensure_user_permissions_schema()
+    ensure_custom_order_schema()
+    ensure_workshop_schema()
     
     # Crear tema por defecto si no existe
     if Theme.query.count() == 0:
@@ -1014,22 +1456,6 @@ def compute_paypal_total_usd(bs_amount):
     gross = (net + fixed) / denominator
     return round(gross, 2)
 
-
-
-
-def extract_measurements_from_form(form):
-    """Construye un diccionario de medidas desde el formulario"""
-    fields = [
-        'largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote',
-        'largo_manga','puno','cuello','abertura','ancho_espalda','figura',
-        'alforza','panos','wato','corridas','color','cadera','talla','quebrado'
-    ]
-    data = {}
-    for f in fields:
-        val = getattr(form, f).data if hasattr(form, f) else None
-        if val:
-            data[f] = val
-    return data
 
 def paypal_get_token():
     """Obtiene token OAuth de PayPal."""
@@ -1381,6 +1807,7 @@ def admin_dashboard():
 
 @app.route('/admin/categorias', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_products')
 def admin_categorias():
     """Listado y creación de categorías"""
     form = CategoryForm()
@@ -1409,6 +1836,7 @@ def admin_categorias():
 
 @app.route('/admin/categorias/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_products')
 def admin_categoria_editar(id):
     """Edición de categoría"""
     categoria = Category.query.get_or_404(id)
@@ -1434,6 +1862,7 @@ def admin_categoria_editar(id):
 
 @app.route('/admin/categorias/eliminar/<int:id>', methods=['POST'])
 @login_required
+@permission_required('manage_products')
 def admin_categoria_eliminar(id):
     """Eliminación de categoría"""
     categoria = Category.query.get_or_404(id)
@@ -1458,6 +1887,7 @@ def admin_categoria_eliminar(id):
 
 @app.route('/admin/productos')
 @login_required
+@permission_required('manage_products')
 def admin_productos():
     """Listado de productos"""
     page = request.args.get('page', 1, type=int)
@@ -1485,6 +1915,7 @@ def admin_productos():
 
 @app.route('/admin/productos/nuevo', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_products')
 def admin_producto_nuevo():
     """Creación de producto"""
     form = ProductForm()
@@ -1539,6 +1970,7 @@ def admin_producto_nuevo():
 
 @app.route('/admin/productos/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_products')
 def admin_producto_editar(id):
     """Edición de producto"""
     producto = Product.query.get_or_404(id)
@@ -1615,6 +2047,7 @@ def admin_producto_editar(id):
 
 @app.route('/admin/productos/eliminar/<int:id>', methods=['POST'])
 @login_required
+@permission_required('manage_products')
 def admin_producto_eliminar(id):
     """Eliminación de producto"""
     producto = Product.query.get_or_404(id)
@@ -1715,6 +2148,7 @@ def admin_usuario_nuevo():
                 is_superadmin=(form.is_superadmin.data == '1')
             )
             user.set_password(form.password.data)
+            user.permissions = [] if user.is_superadmin else (form.permissions.data or [])
             
             if form.profile_image.data:
                 filename = save_image(form.profile_image.data, PROFILE_FOLDER, f'profile_{form.username.data}_')
@@ -1722,13 +2156,22 @@ def admin_usuario_nuevo():
                     user.profile_image = filename
             
             db.session.add(user)
+            db.session.flush()  # asegurar user.id para el log
+            if user.permissions:
+                record_permission_change(
+                    user,
+                    before=[],
+                    after=user.permissions,
+                    changed_by=current_user.username,
+                    note='Permisos asignados al crear usuario'
+                )
             db.session.commit()
             
             create_notification(f'Nuevo administrador: {user.username}', current_user.username, 'success')
             flash('Usuario creado correctamente.', 'success')
             return redirect(url_for('admin_usuarios'))
     
-    return render_template('admin/usuario_form.html', form=form, nuevo=True)
+    return render_template('admin/usuario_form.html', form=form, nuevo=True, logs=[])
 
 
 @app.route('/admin/usuarios/editar/<int:id>', methods=['GET', 'POST'])
@@ -1739,35 +2182,50 @@ def admin_usuario_editar(id):
     user = User.query.get_or_404(id)
     form = UserForm(obj=user)
     form.is_superadmin.data = '1' if user.is_superadmin else '0'
-    
+    if request.method == 'GET':
+        form.permissions.data = user.permissions or []
+
     if form.validate_on_submit():
         existing = User.query.filter_by(username=form.username.data).first()
         if existing and existing.id != id:
-            flash('Ese nombre de usuario ya está en uso.', 'warning')
+            flash('Ese nombre de usuario ya esta en uso.', 'warning')
         else:
+            old_permissions = user.permissions or []
             user.name = form.name.data
             user.username = form.username.data
             user.is_superadmin = (request.form.get('is_superadmin') == '1')
-            
+            if user.is_superadmin:
+                user.permissions = []
+            else:
+                user.permissions = form.permissions.data or []
+
             if form.password.data:
                 user.set_password(form.password.data)
-            
+
             if form.profile_image.data:
                 if user.profile_image:
                     old_path = os.path.join(PROFILE_FOLDER, user.profile_image)
                     if os.path.exists(old_path):
                         os.remove(old_path)
-                
+
                 filename = save_image(form.profile_image.data, PROFILE_FOLDER, f'profile_{user.id}_')
                 if filename:
                     user.profile_image = filename
-            
+            new_permissions = user.permissions or []
+            if old_permissions != new_permissions:
+                record_permission_change(
+                    user,
+                    before=old_permissions,
+                    after=new_permissions,
+                    changed_by=current_user.username,
+                    note='Permisos actualizados'
+                )
             db.session.commit()
             flash('Usuario actualizado.', 'success')
             return redirect(url_for('admin_usuarios'))
-    
-    return render_template('admin/usuario_form.html', form=form, nuevo=False, user=user)
 
+    logs = UserPermissionLog.query.filter_by(user_id=user.id).order_by(UserPermissionLog.created_at.desc()).limit(10).all()
+    return render_template('admin/usuario_form.html', form=form, nuevo=False, user=user, logs=logs)
 
 @app.route('/admin/usuarios/eliminar/<int:id>', methods=['POST'])
 @login_required
@@ -1800,7 +2258,7 @@ def admin_usuario_eliminar(id):
 
 @app.route('/admin/temas')
 @login_required
-@superadmin_required
+@permission_required('manage_themes')
 def admin_themes():
     """Listado de temas"""
     temas = Theme.query.order_by(Theme.created_at.desc()).all()
@@ -1809,7 +2267,7 @@ def admin_themes():
 
 @app.route('/admin/temas/nuevo', methods=['GET', 'POST'])
 @login_required
-@superadmin_required
+@permission_required('manage_themes')
 def admin_theme_nuevo():
     """Crear tema"""
     form = ThemeForm()
@@ -1840,7 +2298,7 @@ def admin_theme_nuevo():
 
 @app.route('/admin/temas/editar/<int:id>', methods=['GET', 'POST'])
 @login_required
-@superadmin_required
+@permission_required('manage_themes')
 def admin_theme_editar(id):
     """Editar tema"""
     tema = Theme.query.get_or_404(id)
@@ -1861,7 +2319,7 @@ def admin_theme_editar(id):
 
 @app.route('/admin/temas/eliminar/<int:id>', methods=['POST'])
 @login_required
-@superadmin_required
+@permission_required('manage_themes')
 def admin_theme_eliminar(id):
     """Eliminar tema"""
     tema = Theme.query.get_or_404(id)
@@ -1879,7 +2337,7 @@ def admin_theme_eliminar(id):
 
 @app.route('/admin/temas/activar', methods=['POST'])
 @login_required
-@superadmin_required
+@permission_required('manage_themes')
 def admin_theme_activar():
     """Activar tema"""
     tema_id = request.form.get('theme_id', type=int)
@@ -1921,7 +2379,7 @@ def admin_contactos():
 
 @app.route('/admin/configuracion', methods=['GET', 'POST'])
 @login_required
-@superadmin_required
+@permission_required('manage_settings')
 def admin_settings():
     """Gestión de configuración del sitio"""
     settings = SiteSettings.query.first()
@@ -1962,6 +2420,7 @@ def admin_settings():
 
 @app.route('/admin/pedidos')
 @login_required
+@permission_required('manage_orders')
 def admin_pedidos():
     """Listado de pedidos"""
     pedidos = Order.query.order_by(Order.created_at.desc()).all()
@@ -1970,6 +2429,7 @@ def admin_pedidos():
 
 @app.route('/admin/pedidos/<int:order_id>/estado', methods=['POST'])
 @login_required
+@permission_required('manage_orders')
 def admin_pedido_estado(order_id):
     """Actualiza el estado de un pedido"""
     pedido = Order.query.get_or_404(order_id)
@@ -1986,6 +2446,7 @@ def admin_pedido_estado(order_id):
 
 @app.route('/admin/pedidos/eliminar/<int:order_id>', methods=['POST'])
 @login_required
+@permission_required('manage_orders')
 def admin_pedido_eliminar(order_id):
     """Eliminar pedido individual"""
     pedido = Order.query.get_or_404(order_id)
@@ -1996,6 +2457,201 @@ def admin_pedido_eliminar(order_id):
     return redirect(request.referrer or url_for('admin_pedidos'))
 
 
+# -------------------------------------------------
+#                TALLERES OFFLINE (API)
+# -------------------------------------------------
+
+
+@app.route('/api/talleres', methods=['GET', 'POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def api_talleres():
+    """CRUD simple de talleres externos (sin login)."""
+    if request.method == 'GET':
+        talleres = Workshop.query.order_by(Workshop.name).all()
+        data = [{
+            'id': t.id,
+            'name': t.name,
+            'phone': t.phone,
+            'is_active': t.is_active,
+            'created_at': t.created_at.isoformat() if t.created_at else None
+        } for t in talleres]
+        return jsonify(data)
+    
+    payload = request.get_json(force=True, silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    phone = (payload.get('phone') or '').strip()
+    if not name:
+        return jsonify({'error': 'El nombre del taller es obligatorio'}), 400
+    taller = Workshop(name=name, phone=phone or None, is_active=bool(payload.get('is_active', True)))
+    db.session.add(taller)
+    db.session.commit()
+    return jsonify({
+        'id': taller.id,
+        'name': taller.name,
+        'phone': taller.phone,
+        'is_active': taller.is_active
+    }), 201
+
+
+@app.route('/api/talleres/<int:workshop_id>', methods=['PUT', 'PATCH', 'DELETE'])
+@login_required
+@permission_required('manage_custom_orders')
+def api_taller_detalle(workshop_id):
+    """Actualiza o elimina un taller."""
+    taller = Workshop.query.get_or_404(workshop_id)
+    if request.method == 'DELETE':
+        db.session.delete(taller)
+        db.session.commit()
+        return jsonify({'status': 'deleted'})
+    
+    payload = request.get_json(force=True, silent=True) or {}
+    if 'name' in payload and payload.get('name'):
+        taller.name = payload.get('name').strip()
+    if 'phone' in payload:
+        taller.phone = (payload.get('phone') or '').strip() or None
+    if 'is_active' in payload:
+        taller.is_active = bool(payload.get('is_active'))
+    taller.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({
+        'id': taller.id,
+        'name': taller.name,
+        'phone': taller.phone,
+        'is_active': taller.is_active
+    })
+
+
+@app.route('/api/custom-orders/items/<int:item_id>/assign-workshop', methods=['POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def api_assign_workshop_item(item_id):
+    """Asigna una prenda a un taller, con fecha y estado auto."""
+    item = CustomOrderItem.query.get_or_404(item_id)
+    payload = request.get_json(force=True, silent=True) or {}
+    workshop_id = payload.get('workshop_id')
+    status = payload.get('status') or 'asignado'
+    if status not in WORKSHOP_ITEM_STATUSES:
+        status = 'asignado'
+    due_raw = payload.get('due_date')
+
+    taller = Workshop.query.get_or_404(workshop_id) if workshop_id else None
+    item.workshop = taller
+    if taller:
+        item.workshop_status = status
+        item.workshop_assigned_at = datetime.utcnow()
+        item.workshop_returned_at = None
+        append_custom_order_history(item.order, item.order.status, f'Prenda {item.id} asignada a {taller.name}', user=(current_user.name or current_user.username))
+    else:
+        item.workshop_status = 'pendiente'
+        item.workshop_assigned_at = None
+        item.workshop_returned_at = None
+        append_custom_order_history(item.order, item.order.status, f'Prenda {item.id} sin taller (asignacion removida)', user=(current_user.name or current_user.username))
+    order = item.order
+    min_limit = max((order.created_at.date() if order and order.created_at else datetime.utcnow().date()), datetime.utcnow().date())
+    max_limit = order.delivery_date if order else None
+    try:
+        parsed_due = datetime.strptime(due_raw, '%Y-%m-%d').date() if due_raw else None
+    except Exception:
+        parsed_due = None
+    if parsed_due:
+        if parsed_due < min_limit:
+            return jsonify({'error': 'La fecha de entrega al taller no puede ser menor a la fecha de registro.'}), 400
+        if max_limit and parsed_due > max_limit:
+            return jsonify({'error': 'La fecha de entrega al taller no puede exceder la fecha limite del pedido.'}), 400
+    item.workshop_due_date = parsed_due
+
+    refresh_order_workshop_status(item.order)
+    db.session.commit()
+
+    return jsonify({
+        'item': serialize_workshop_item(item),
+        'order_status': item.order.status
+    })
+
+
+@app.route('/api/custom-orders/items/<int:item_id>/whatsapp', methods=['GET'])
+@login_required
+@permission_required('manage_custom_orders')
+def api_item_whatsapp_link(item_id):
+    """Devuelve mensaje y link prellenado para el taller asignado."""
+    item = CustomOrderItem.query.get_or_404(item_id)
+    link = build_workshop_whatsapp_link(item)
+    if not link:
+        return jsonify({'error': 'La prenda no tiene taller asignado con telefono valido'}), 400
+    return jsonify({
+        'workshop': {
+            'id': item.workshop.id,
+            'name': item.workshop.name,
+            'phone': item.workshop.phone
+        },
+        'message': build_workshop_message(item),
+        'link': link
+    })
+
+
+@app.route('/api/custom-orders/items/<int:item_id>/status', methods=['POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def api_item_workshop_status(item_id):
+    """Actualiza estado de prenda (recibido/listo/entregado/cancelado)."""
+    item = CustomOrderItem.query.get_or_404(item_id)
+    payload = request.get_json(force=True, silent=True) or {}
+    new_status = payload.get('status')
+    if new_status not in WORKSHOP_ITEM_STATUSES:
+        return jsonify({'error': 'Estado invalido'}), 400
+    # Solo permitir avanzar, no retroceder a pendiente si ya hay taller
+    old_status = item.workshop_status or 'pendiente'
+    item.workshop_status = new_status
+    if new_status == 'recibido':
+        item.workshop_returned_at = datetime.utcnow()
+    if new_status in ('listo', 'entregado') and not item.workshop_returned_at:
+        item.workshop_returned_at = datetime.utcnow()
+    if new_status == 'cancelado':
+        item.workshop_due_date = None
+        item.workshop_assigned_at = None
+        item.workshop_returned_at = None
+        item.workshop_id = None
+    # Si se entrega al cliente, registrar fecha/hora final en pedido
+    if new_status == 'entregado' and item.order and not getattr(item.order, 'delivered_at', None):
+        item.order.delivered_at = datetime.utcnow() - timedelta(hours=4)
+    append_custom_order_history(
+        item.order,
+        item.order.status,
+        f'Prenda {item.id}: {WORKSHOP_ITEM_STATUS_LABELS.get(old_status, old_status)} -> {WORKSHOP_ITEM_STATUS_LABELS.get(new_status, new_status)}',
+        user=(current_user.name or current_user.username)
+    )
+    refresh_order_workshop_status(item.order)
+    db.session.commit()
+    return jsonify({
+        'item': serialize_workshop_item(item),
+        'order_status': item.order.status
+    })
+
+
+@app.route('/api/pedidos-personalizados/en-taller')
+@login_required
+@permission_required('manage_custom_orders')
+def api_pedidos_en_taller():
+    """Listado filtrado de pedidos donde todas las prendas estan asignadas."""
+    pedidos = CustomOrder.query.filter_by(is_deleted=False).order_by(CustomOrder.created_at.desc()).all()
+    data = []
+    for p in pedidos:
+        try:
+            items = p.items.all()
+        except Exception:
+            items = list(p.items or [])
+        if items and all((i.workshop_status == 'asignado' and i.workshop_id) for i in items):
+            data.append({
+                'id': p.id,
+                'code': p.code,
+                'cliente': p.client.name if p.client else '',
+                'status': p.status,
+                'items': [serialize_workshop_item(it) for it in items]
+            })
+    return jsonify(data)
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #                       # -------------------------------------------------
 #              PEDIDOS PERSONALIZADOS
@@ -2004,23 +2660,34 @@ def admin_pedido_eliminar(order_id):
 
 def _custom_order_client_choices():
     choices = [(0, 'Nuevo cliente')]
-    for c in Client.query.order_by(Client.name).all():
-        label = f"{c.name} ({c.phone})"
+    for c in Client.query.filter_by(is_deleted=False).order_by(Client.name).all():
+        phone = c.phone or 'Sin telefono'
+        doc = f" · {c.id_number}" if c.id_number else ''
+        label = f"{c.name} ({phone}){doc}"
         choices.append((c.id, label))
     return choices
+
+
+def _tailor_user_choices():
+    return [(0, 'Asignacion por prenda')]
 
 
 @app.route('/admin/pedidos-personalizados')
 @login_required
 def admin_custom_orders():
     """Listado de pedidos personalizados"""
+    if not (current_user.is_superadmin or has_permission(current_user, 'manage_custom_orders')):
+        abort(403)
+    tailor_only = False
     page = request.args.get('page', 1, type=int)
     client_id = request.args.get('cliente', type=int)
     garment = request.args.get('tipo', '', type=str)
     estado = request.args.get('estado', '', type=str)
     urgente = request.args.get('urgente', type=str)
+    search_term = (request.args.get('q') or '').strip()
 
-    query = CustomOrder.query.join(Client)
+    base_query = CustomOrder.query.join(Client).filter(CustomOrder.is_deleted == False)
+    query = base_query
     if client_id:
         query = query.filter(CustomOrder.client_id == client_id)
     if garment:
@@ -2029,17 +2696,35 @@ def admin_custom_orders():
         query = query.filter(CustomOrder.status == estado)
     if urgente == '1':
         query = query.filter(CustomOrder.is_urgent == True)
+    if search_term:
+        like_term = f"%{search_term}%"
+        query = query.filter(
+            or_(
+                CustomOrder.code.ilike(like_term),
+                Client.name.ilike(like_term)
+            )
+        )
+    # Ocultar entregados en la vista principal si no se filtra por estado
+    if not estado:
+        query = query.filter(CustomOrder.status != 'entregado')
 
     pagination = db.paginate(query.order_by(CustomOrder.created_at.desc()), page=page, per_page=15, error_out=False)
-    clients = Client.query.order_by(Client.name).all()
+    clients = Client.query.filter_by(is_deleted=False).order_by(Client.name).all()
     today = datetime.utcnow().date()
-    soon_orders = CustomOrder.query.filter(
-        CustomOrder.delivery_date != None
-    ).filter(
+    soon_orders = base_query.filter(
+        CustomOrder.delivery_date != None,
         CustomOrder.delivery_date <= today + timedelta(days=3)
     ).order_by(CustomOrder.delivery_date.asc()).all()
-    agenda_items = CustomOrder.query.filter(CustomOrder.delivery_date != None).order_by(CustomOrder.delivery_date.asc(), CustomOrder.is_urgent.desc()).limit(100).all()
-    urgentes_count = CustomOrder.query.filter_by(is_urgent=True).count()
+    agenda_items = base_query.filter(CustomOrder.delivery_date != None).order_by(CustomOrder.delivery_date.asc(), CustomOrder.is_urgent.desc()).limit(100).all()
+    urgentes_count = base_query.filter(CustomOrder.is_urgent == True).count()
+    changed = False
+    for p in pagination.items:
+        prev = p.status
+        refresh_order_workshop_status(p)
+        if p.status != prev:
+            changed = True
+    if changed:
+        db.session.commit()
 
     return render_template('admin/custom_orders.html',
         pedidos=pagination.items,
@@ -2052,25 +2737,210 @@ def admin_custom_orders():
         filtro_tipo=garment,
         filtro_estado=estado,
         filtro_urgente=urgente,
+        search_term=search_term,
         agenda_items=agenda_items,
         urgentes_count=urgentes_count,
         now_date=today,
-        soon_orders=soon_orders
+        soon_orders=soon_orders,
+        tailor_only_flag=tailor_only,
+        tailor_statuses=list(TAILOR_ALLOWED_STATUSES)
+    )
+
+
+@app.route('/admin/taller/pedidos')
+@login_required
+def admin_tailor_orders():
+    """Vista dedicada para costureras: solo pedidos asignados, sin fechas ni ediciones."""
+    if not (current_user.is_superadmin or has_permission(current_user, 'manage_custom_orders')):
+        abort(403)
+    page = request.args.get('page', 1, type=int)
+    estado = request.args.get('estado', '', type=str)
+    base_q = CustomOrder.query.filter_by(is_deleted=False)
+    if estado:
+        base_q = base_q.filter(CustomOrder.status == estado)
+    pagination = db.paginate(base_q.order_by(CustomOrder.created_at.desc()), page=page, per_page=12, error_out=False)
+    return render_template(
+        'admin/tailor_orders.html',
+        pedidos=pagination.items,
+        pagination=pagination,
+        estado=estado,
+        estados=list(TAILOR_ALLOWED_STATUSES),
+        estado_labels=CUSTOM_ORDER_STATUS_LABELS
+    )
+
+
+@app.route('/admin/taller/asignar', methods=['GET', 'POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def admin_taller_asignar():
+    """Asignacion por pedido deshabilitada: solo se asigna por prenda."""
+    flash('La asignacion completa de pedidos esta deshabilitada. Asigna cada prenda al taller.', 'info')
+    return redirect(url_for('admin_custom_orders'))
+
+
+@app.route('/admin/talleres', methods=['GET', 'POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def admin_workshops():
+    """Panel interno para crear/editar talleres offline."""
+    if request.method == 'POST':
+        name = (request.form.get('name') or '').strip()
+        phone = (request.form.get('phone') or '').strip()
+        is_active = bool(request.form.get('is_active'))
+        if not name:
+            flash('El nombre del taller es obligatorio.', 'warning')
+            return redirect(url_for('admin_workshops'))
+        existing = Workshop.query.filter(func.lower(Workshop.name) == name.lower()).first()
+        if existing:
+            flash('Ya existe un taller con ese nombre.', 'warning')
+            return redirect(url_for('admin_workshops'))
+        taller = Workshop(name=name, phone=phone or None, is_active=is_active)
+        db.session.add(taller)
+        db.session.commit()
+        flash('Taller creado.', 'success')
+        return redirect(url_for('admin_workshops'))
+    
+    talleres = Workshop.query.order_by(Workshop.is_active.desc(), Workshop.name.asc()).all()
+    return render_template('admin/workshops.html', talleres=talleres)
+
+
+@app.route('/admin/talleres/confeccion')
+@login_required
+@permission_required('manage_custom_orders')
+def admin_workshop_board():
+    """Tablero de prendas en taller: asignadas y recibidas."""
+    assigned_items = CustomOrderItem.query.join(CustomOrder).filter(
+        CustomOrderItem.workshop_id != None,
+        CustomOrderItem.workshop_status == 'asignado',
+        CustomOrder.is_deleted == False
+    ).order_by(CustomOrderItem.workshop_due_date.asc()).all()
+
+    received_items = CustomOrderItem.query.join(CustomOrder).filter(
+        CustomOrderItem.workshop_id != None,
+        CustomOrderItem.workshop_status == 'recibido',
+        CustomOrder.is_deleted == False
+    ).order_by(CustomOrderItem.workshop_due_date.asc()).all()
+
+    return render_template(
+        'admin/workshop_board.html',
+        assigned_items=assigned_items,
+        received_items=received_items,
+        estado_labels=CUSTOM_ORDER_STATUS_LABELS
+    )
+
+
+@app.route('/admin/talleres/<int:workshop_id>/toggle', methods=['POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def admin_workshop_toggle(workshop_id):
+    """Activa/desactiva taller."""
+    taller = Workshop.query.get_or_404(workshop_id)
+    taller.is_active = not bool(taller.is_active)
+    db.session.commit()
+    flash(f"Taller {'activado' if taller.is_active else 'desactivado'}.", 'info')
+    return redirect(url_for('admin_workshops'))
+
+
+@app.route('/admin/talleres/<int:workshop_id>/eliminar', methods=['POST'])
+@login_required
+@permission_required('manage_custom_orders')
+def admin_workshop_eliminar(workshop_id):
+    """Elimina taller y libera prendas asociadas."""
+    taller = Workshop.query.get_or_404(workshop_id)
+    for item in CustomOrderItem.query.filter_by(workshop_id=taller.id).all():
+        item.workshop_id = None
+        item.workshop_status = 'pendiente'
+        item.workshop_assigned_at = None
+        item.workshop_due_date = None
+        item.workshop_returned_at = None
+    db.session.delete(taller)
+    db.session.commit()
+    flash('Taller eliminado y prendas liberadas.', 'warning')
+    return redirect(url_for('admin_workshops'))
+
+
+@app.route('/admin/pedidos-personalizados/entregados')
+@login_required
+def admin_custom_orders_entregados():
+    """Seccion de pedidos personalizados entregados."""
+    if not (current_user.is_superadmin or has_permission(current_user, 'manage_custom_orders')):
+        abort(403)
+    tailor_only = False
+    page = request.args.get('page', 1, type=int)
+    search_term = (request.args.get('q') or '').strip()
+    base_q = CustomOrder.query.filter_by(is_deleted=False, status='entregado')
+    if search_term:
+        like = f"%{search_term}%"
+        base_q = base_q.join(Client).filter(
+            or_(
+                CustomOrder.code.ilike(like),
+                Client.name.ilike(like)
+            )
+        )
+    pagination = db.paginate(
+        base_q.order_by(CustomOrder.updated_at.desc()),
+        page=page,
+        per_page=15,
+        error_out=False
+    )
+    return render_template(
+        'admin/custom_orders_delivered.html',
+        pedidos=pagination.items,
+        pagination=pagination,
+        search_term=search_term,
+        tailor_only_flag=tailor_only,
+        estado_labels=CUSTOM_ORDER_STATUS_LABELS
+    )
+
+
+@app.route('/admin/pedidos-personalizados/entregados/<int:order_id>')
+@login_required
+def admin_custom_order_entregado_detalle(order_id):
+    """Detalle de pedido entregado en modo solo lectura."""
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False, status='entregado').first_or_404()
+    if not (current_user.is_superadmin or has_permission(current_user, 'manage_custom_orders')):
+        abort(403)
+    history = get_custom_order_history(pedido)
+    return render_template(
+        'admin/custom_order_delivered_detail.html',
+        pedido=pedido,
+        history=history,
+        estado_labels=CUSTOM_ORDER_STATUS_LABELS,
+        WORKSHOP_ITEM_STATUS_LABELS=WORKSHOP_ITEM_STATUS_LABELS
+    )
+
+@app.route('/admin/taller/pedidos/<int:order_id>')
+@login_required
+def admin_tailor_order_detalle(order_id):
+    """Detalle simplificado para costurera."""
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
+    if not tailor_can_access_order(current_user, pedido):
+        abort(403)
+    history = get_custom_order_history(pedido)
+    return render_template(
+        'admin/tailor_order_detail.html',
+        pedido=pedido,
+        history=history,
+        estado_labels=CUSTOM_ORDER_STATUS_LABELS,
+        tailor_statuses=list(TAILOR_ALLOWED_STATUSES)
     )
 
 
 @app.route('/admin/pedidos-personalizados/nuevo', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_custom_orders')
 def admin_custom_order_nuevo():
     """Crear pedido personalizado"""
     form = CustomOrderForm()
     form.client_id.choices = _custom_order_client_choices()
+    form.assigned_to.choices = [(0, 'Asignacion por prenda (sin taller de pedido)')]
     prefill_client = request.args.get('cliente', type=int)
     if request.method == 'GET':
         if prefill_client:
             form.client_id.data = prefill_client
         elif not form.client_id.data:
             form.client_id.data = 0
+        form.assigned_to.data = 0
 
     if form.validate_on_submit():
         # Validar items en JSON
@@ -2091,12 +2961,26 @@ def admin_custom_order_nuevo():
         client = None
         if form.client_id.data and form.client_id.data != 0:
             client = Client.query.get(form.client_id.data)
+            if client and client.is_deleted:
+                flash('El cliente seleccionado está en papelera. Restaura primero para usarlo.', 'danger')
+                return render_template('admin/custom_order_form.html', form=form, nuevo=True)
         if not client:
             if not form.new_client_name.data:
                 flash('Debes seleccionar un cliente o ingresar nombre.', 'warning')
                 return render_template('admin/custom_order_form.html', form=form, nuevo=True)
-            phone_val = (form.new_client_phone.data or '').strip() or 'Sin telefono'
-            client = Client(name=form.new_client_name.data.strip(), phone=phone_val)
+            # Evitar duplicar clientes con el mismo nombre
+            name_val = form.new_client_name.data.strip()
+            existing = Client.query.filter(func.lower(Client.name) == name_val.lower()).first()
+            if existing:
+                flash('Ya existe un cliente con ese nombre, selecciona el existente.', 'warning')
+                return render_template('admin/custom_order_form.html', form=form, nuevo=True)
+            phone_val = (form.new_client_phone.data or '').strip()
+            id_number_val = (getattr(form, 'new_client_id_number', None).data if hasattr(form, 'new_client_id_number') else None)
+            client = Client(
+                name=name_val,
+                phone=phone_val,
+                id_number=(id_number_val or '').strip() or None
+            )
             db.session.add(client)
             db.session.flush()
 
@@ -2111,12 +2995,15 @@ def admin_custom_order_nuevo():
             client_id=client.id,
             garment_type=first_item.get('garment_type'),
             delivery_date=form.delivery_date.data,
+            shop_due_date=form.shop_due_date.data,
             deposit=form.deposit.data,
             total=form.total.data,
             observations=form.observations.data,
             is_urgent=form.is_urgent.data,
             status=form.status.data,
-            measurements=order_measurements
+            measurements=order_measurements,
+            assigned_to=None,
+            assigned_at=None
         )
         db.session.add(order)
         db.session.flush()
@@ -2135,7 +3022,8 @@ def admin_custom_order_nuevo():
                 client.measurements = client.measurements or {}
                 client.measurements[item.get('garment_type')] = m
 
-        append_custom_order_history(order, form.status.data, 'Estado inicial', user=current_user.username if current_user.is_authenticated else 'sistema')
+        actor = current_user.name or current_user.username if current_user.is_authenticated else 'sistema'
+        append_custom_order_history(order, form.status.data, 'Estado inicial', user=actor)
         db.session.commit()
 
         files = request.files.getlist('images')
@@ -2156,36 +3044,119 @@ def admin_custom_order_nuevo():
 @login_required
 def admin_custom_order_detalle(order_id):
     """Detalle de pedido personalizado"""
-    pedido = CustomOrder.query.get_or_404(order_id)
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
+    if not tailor_can_access_order(current_user, pedido):
+        abort(403)
     history = get_custom_order_history(pedido)
-    return render_template('admin/custom_order_detail.html', pedido=pedido, history=history)
+    tailor_only = False
+    workshops = Workshop.query.order_by(Workshop.name).all()
+    workshops_json = [{'id': w.id, 'name': w.name, 'phone': w.phone} for w in workshops]
+    assign_min_date = max((pedido.created_at.date() if pedido.created_at else datetime.utcnow().date()), datetime.utcnow().date())
+    assign_max_date = pedido.delivery_date
+    readonly = request.args.get('readonly') == '1'
+    today = datetime.utcnow().date()
+    return render_template(
+        'admin/custom_order_detail.html',
+        pedido=pedido,
+        history=history,
+        tailor_only=tailor_only,
+        tailor_users=[(0, 'Asignacion por pedido deshabilitada')],
+        tailor_statuses=list(TAILOR_ALLOWED_STATUSES),
+        workshops=workshops,
+        workshops_json=workshops_json,
+        assign_min_date=assign_min_date,
+        assign_max_date=assign_max_date,
+        readonly=readonly,
+        today=today
+    )
 
 
 @app.route('/admin/pedidos-personalizados/eliminar/<int:order_id>', methods=['POST'])
 @login_required
+@permission_required('manage_custom_orders')
 def admin_custom_order_eliminar(order_id):
     """Eliminar pedido personalizado"""
     pedido = CustomOrder.query.get_or_404(order_id)
-    delete_custom_order_assets(pedido)
+    # Si el cliente está activo, solo borrar pedido; si estaba en papelera, se mantiene
+    pedido.is_deleted = True
+    pedido.deleted_at = datetime.utcnow()
+    pedido.deleted_by = current_user.name or current_user.username
+    flag_modified(pedido, 'measurements')
+    db.session.commit()
+    flash(f'Pedido personalizado {pedido.code} movido a papelera.', 'warning')
+    return redirect(url_for('admin_custom_orders'))
+
+
+@app.route('/admin/pedidos-personalizados/papelera')
+@login_required
+@superadmin_required
+def admin_custom_orders_trash():
+    pedidos = CustomOrder.query.filter_by(is_deleted=True).order_by(CustomOrder.deleted_at.desc()).all()
+    return render_template('admin/custom_orders_trash.html', pedidos=pedidos, CUSTOM_ORDER_STATUS_LABELS=CUSTOM_ORDER_STATUS_LABELS)
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/restaurar', methods=['POST'])
+@login_required
+@superadmin_required
+def admin_custom_order_restaurar(order_id):
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=True).first_or_404()
+    # Restaurar cliente si está en papelera
+    cliente = pedido.client
+    if cliente and cliente.is_deleted:
+        cliente.is_deleted = False
+        cliente.deleted_at = None
+        cliente.deleted_by = None
+        flag_modified(cliente, 'measurements')
+    pedido.is_deleted = False
+    pedido.deleted_at = None
+    pedido.deleted_by = None
+    flag_modified(pedido, 'measurements')
+    db.session.commit()
+    flash(f'Pedido {pedido.code} restaurado.', 'success')
+    return redirect(url_for('admin_custom_orders_trash'))
+
+
+@app.route('/admin/pedidos-personalizados/<int:order_id>/purga', methods=['POST'])
+@login_required
+@superadmin_required
+def admin_custom_order_purga(order_id):
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=True).first_or_404()
     code = pedido.code
+    delete_custom_order_assets(pedido)
     db.session.delete(pedido)
     db.session.commit()
-    flash(f'Pedido personalizado {code} eliminado.', 'warning')
-    return redirect(url_for('admin_custom_orders'))
+    flash(f'Pedido {code} eliminado definitivamente.', 'danger')
+    return redirect(url_for('admin_custom_orders_trash'))
 
 
 @app.route('/admin/pedidos-personalizados/<int:order_id>/estado', methods=['POST'])
 @login_required
 def admin_custom_order_estado(order_id):
     """Actualizar estado del pedido y registrar historial"""
-    pedido = CustomOrder.query.get_or_404(order_id)
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
+    if not (current_user.is_superadmin or has_permission(current_user, 'manage_custom_orders') or tailor_can_access_order(current_user, pedido)):
+        abort(403)
     new_status = request.form.get('status')
     note = request.form.get('note', '')
     if new_status not in CUSTOM_ORDER_STATUSES:
-        abort(400, description='Estado no válido')
+        abort(400, description='Estado no valido')
+    if is_tailor_only(current_user):
+        if new_status not in TAILOR_ALLOWED_STATUSES:
+            abort(403)
+        if pedido.status == 'entregado':
+            abort(403)
+        try:
+            old_idx = STATUS_FLOW.index(pedido.status)
+            new_idx = STATUS_FLOW.index(new_status)
+            if new_idx < old_idx:
+                abort(403)
+        except ValueError:
+            abort(403)
+    elif not (current_user.is_superadmin or has_permission(current_user, 'manage_custom_orders')):
+        abort(403)
     old_status = pedido.status
     pedido.status = new_status
-    append_custom_order_history(pedido, new_status, note or f'Cambio desde {old_status}', user=current_user.username)
+    append_custom_order_history(pedido, new_status, note or f'Cambio desde {old_status}', user=(current_user.name or current_user.username))
     db.session.commit()
     flash(f'Estado actualizado a {CUSTOM_ORDER_STATUS_LABELS.get(new_status, new_status)} para {pedido.code}.', 'success')
     return redirect(request.referrer or url_for('admin_custom_orders'))
@@ -2193,9 +3164,10 @@ def admin_custom_order_estado(order_id):
 
 @app.route('/admin/pedidos-personalizados/<int:order_id>/items/nuevo', methods=['POST'])
 @login_required
+@permission_required('manage_custom_orders')
 def admin_custom_order_item_nuevo(order_id):
     """Agregar una nueva prenda dentro del pedido existente"""
-    pedido = CustomOrder.query.get_or_404(order_id)
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
     form = CustomOrderItemForm()
     form.garment_type.choices = [(t, t) for t in CUSTOM_ORDER_TYPES]
     if form.validate_on_submit():
@@ -2217,7 +3189,7 @@ def admin_custom_order_item_nuevo(order_id):
         note = f'Prenda agregada: {form.garment_type.data}'
         if medidas_count:
             note += f' ({medidas_count} medidas)'
-        append_custom_order_history(pedido, pedido.status, note, user=current_user.username)
+        append_custom_order_history(pedido, pedido.status, note, user=(current_user.name or current_user.username))
         db.session.commit()
         flash('Prenda agregada al pedido.', 'success')
     else:
@@ -2227,8 +3199,9 @@ def admin_custom_order_item_nuevo(order_id):
 
 @app.route('/admin/pedidos-personalizados/<int:order_id>/items/<int:item_id>/editar', methods=['POST'])
 @login_required
+@permission_required('manage_custom_orders')
 def admin_custom_order_item_editar(order_id, item_id):
-    pedido = CustomOrder.query.get_or_404(order_id)
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
     item = CustomOrderItem.query.get_or_404(item_id)
     if item.order_id != pedido.id:
         abort(404)
@@ -2236,7 +3209,7 @@ def admin_custom_order_item_editar(order_id, item_id):
     if not tipo:
         flash('Tipo de prenda requerido.', 'danger')
         return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
-    fields = ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado']
+    fields = MEASUREMENT_FIELDS
     old_measures = item.measurements or {}
     measures = {}
     for f in fields:
@@ -2261,7 +3234,7 @@ def admin_custom_order_item_editar(order_id, item_id):
     note = f'Prenda editada: {tipo}'
     if changes:
         note += ' | Cambios: ' + '; '.join(changes)
-    append_custom_order_history(pedido, pedido.status, note, user=current_user.username)
+    append_custom_order_history(pedido, pedido.status, note, user=(current_user.name or current_user.username))
     db.session.commit()
     flash('Prenda actualizada.', 'success')
     return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
@@ -2269,13 +3242,14 @@ def admin_custom_order_item_editar(order_id, item_id):
 
 @app.route('/admin/pedidos-personalizados/<int:order_id>/items/<int:item_id>/eliminar', methods=['POST'])
 @login_required
+@permission_required('manage_custom_orders')
 def admin_custom_order_item_eliminar(order_id, item_id):
-    pedido = CustomOrder.query.get_or_404(order_id)
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
     item = CustomOrderItem.query.get_or_404(item_id)
     if item.order_id != pedido.id:
         abort(404)
     db.session.delete(item)
-    append_custom_order_history(pedido, pedido.status, f'Prenda eliminada: {item.garment_type}', user=current_user.username)
+    append_custom_order_history(pedido, pedido.status, f'Prenda eliminada: {item.garment_type}', user=(current_user.name or current_user.username))
     db.session.commit()
     flash('Prenda eliminada del pedido.', 'warning')
     return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
@@ -2283,14 +3257,16 @@ def admin_custom_order_item_eliminar(order_id, item_id):
 
 @app.route('/admin/pedidos-personalizados/<int:order_id>/editar', methods=['POST'])
 @login_required
+@permission_required('manage_custom_orders')
 def admin_custom_order_editar(order_id):
-    pedido = CustomOrder.query.get_or_404(order_id)
+    pedido = CustomOrder.query.filter_by(id=order_id, is_deleted=False).first_or_404()
     old_status = pedido.status
     old_delivery = pedido.delivery_date
     old_deposit = pedido.deposit
     old_total = pedido.total
     old_obs = pedido.observations
     old_urgent = pedido.is_urgent
+    old_assigned = pedido.assigned_to
     delivery_date = request.form.get('delivery_date')
     pedido.delivery_date = datetime.strptime(delivery_date, '%Y-%m-%d').date() if delivery_date else None
     pedido.deposit = request.form.get('deposit') or None
@@ -2299,6 +3275,9 @@ def admin_custom_order_editar(order_id):
     pedido.is_urgent = bool(request.form.get('is_urgent'))
     new_status = request.form.get('status') or pedido.status
     pedido.status = new_status
+    # Asignacion por pedido deshabilitada
+    pedido.assigned_to = None
+    pedido.assigned_at = None
     changes = []
     if old_status != new_status:
         changes.append(f"estado {old_status} -> {new_status}")
@@ -2312,10 +3291,15 @@ def admin_custom_order_editar(order_id):
         changes.append("observaciones actualizadas")
     if old_urgent != pedido.is_urgent:
         changes.append(f"urgente {old_urgent} -> {pedido.is_urgent}")
-    note = f'Pedido editado por {current_user.username}'
+    if old_assigned != pedido.assigned_to:
+        old_user = db.session.get(User, old_assigned) if old_assigned else None
+        new_user = db.session.get(User, pedido.assigned_to) if pedido.assigned_to else None
+        changes.append(f"asignado {(old_user.name or old_user.username) if old_user else '-'} -> {(new_user.name or new_user.username) if new_user else '-'}")
+    actor = current_user.name or current_user.username
+    note = f'Pedido editado por {actor}'
     if changes:
         note += " | " + "; ".join(changes)
-    append_custom_order_history(pedido, new_status, note, user=current_user.username)
+    append_custom_order_history(pedido, new_status, note, user=actor)
     db.session.commit()
     flash('Pedido actualizado.', 'success')
     return redirect(url_for('admin_custom_order_detalle', order_id=pedido.id))
@@ -2323,14 +3307,86 @@ def admin_custom_order_editar(order_id):
 
 @app.route('/admin/clientes')
 @login_required
+@permission_required('manage_clients')
 def admin_clientes():
     """Listado de clientes"""
-    clientes = Client.query.order_by(Client.name).all()
+    clientes = Client.query.filter_by(is_deleted=False).order_by(Client.name).all()
     return render_template('admin/clientes.html', clientes=clientes)
+
+
+@app.route('/admin/clientes/eliminar/<int:id>', methods=['POST'])
+@login_required
+@permission_required('manage_clients')
+def admin_cliente_eliminar(id):
+    """Enviar cliente a papelera (soft delete)."""
+    cliente = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
+    cliente.is_deleted = True
+    cliente.deleted_at = datetime.utcnow()
+    cliente.deleted_by = current_user.name or current_user.username
+    # Mover también sus pedidos a papelera
+    for pedido in cliente.custom_orders:
+        if not pedido.is_deleted:
+            pedido.is_deleted = True
+            pedido.deleted_at = datetime.utcnow()
+            pedido.deleted_by = cliente.deleted_by
+            flag_modified(pedido, 'measurements')
+    flag_modified(cliente, 'measurements')
+    db.session.commit()
+    flash(f'Cliente {cliente.name} movido a la papelera.', 'warning')
+    return redirect(url_for('admin_clientes'))
+
+
+@app.route('/admin/clientes/papelera')
+@login_required
+@superadmin_required
+def admin_clientes_papelera():
+    """Listado de clientes eliminados (solo superadmin)."""
+    clientes = Client.query.filter_by(is_deleted=True).order_by(Client.deleted_at.desc()).all()
+    return render_template('admin/clientes_papelera.html', clientes=clientes)
+
+
+@app.route('/admin/clientes/<int:id>/restaurar', methods=['POST'])
+@login_required
+@superadmin_required
+def admin_cliente_restaurar(id):
+    cliente = Client.query.filter_by(id=id, is_deleted=True).first_or_404()
+    cliente.is_deleted = False
+    cliente.deleted_at = None
+    cliente.deleted_by = None
+    # Restaurar pedidos asociados
+    for pedido in cliente.custom_orders:
+        if pedido.is_deleted:
+            pedido.is_deleted = False
+            pedido.deleted_at = None
+            pedido.deleted_by = None
+            flag_modified(pedido, 'measurements')
+    flag_modified(cliente, 'measurements')
+    db.session.commit()
+    flash(f'Cliente {cliente.name} restaurado.', 'success')
+    return redirect(url_for('admin_clientes_papelera'))
+
+
+@app.route('/admin/clientes/<int:id>/purga', methods=['POST'])
+@login_required
+@superadmin_required
+def admin_cliente_purga(id):
+    cliente = Client.query.filter_by(id=id, is_deleted=True).first_or_404()
+    name = cliente.name
+    # Eliminar activos de pedidos personalizados asociados antes de borrar
+    for pedido in list(cliente.custom_orders or []):
+        try:
+            delete_custom_order_assets(pedido)
+        except Exception:
+            pass
+    db.session.delete(cliente)
+    db.session.commit()
+    flash(f'Cliente {name} eliminado definitivamente.', 'danger')
+    return redirect(url_for('admin_clientes_papelera'))
 
 
 @app.route('/admin/clientes/nuevo', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_clients')
 def admin_cliente_nuevo():
     """Crear cliente y registrar medidas base"""
     form = ClientForm()
@@ -2338,7 +3394,11 @@ def admin_cliente_nuevo():
     if not form.garment_type.data:
         form.garment_type.data = CUSTOM_ORDER_TYPES[0]
     if form.validate_on_submit():
-        cliente = Client(name=form.name.data, phone=form.phone.data)
+        cliente = Client(
+            name=form.name.data,
+            phone=(form.phone.data or '').strip(),
+            id_number=(form.id_number.data or '').strip() or None
+        )
         medidas = extract_measurements_from_form(form)
         if medidas:
             cliente.measurements = {form.garment_type.data: medidas}
@@ -2352,27 +3412,57 @@ def admin_cliente_nuevo():
 
 @app.route('/admin/clientes/<int:id>/editar', methods=['GET', 'POST'])
 @login_required
+@permission_required('manage_clients')
 def admin_cliente_editar(id):
     """Editar cliente y medidas"""
-    cliente = Client.query.get_or_404(id)
+    cliente = Client.query.filter_by(id=id, is_deleted=False).first_or_404()
     form = ClientForm()
     form.garment_type.choices = [(t, t) for t in CUSTOM_ORDER_TYPES]
+    old_measures = {}
     if request.method == 'GET':
         form.name.data = cliente.name
         form.phone.data = cliente.phone
+        form.id_number.data = cliente.id_number
         form.garment_type.data = CUSTOM_ORDER_TYPES[0]
         # Prefill primeras medidas si existen
         medidas = (cliente.measurements or {}).get(form.garment_type.data, {})
         for k, v in medidas.items():
             if hasattr(form, k):
                 getattr(form, k).data = v
+        old_measures = dict(medidas)
     if form.validate_on_submit():
+        old_measures = dict((cliente.measurements or {}).get(form.garment_type.data, {}))
         cliente.name = form.name.data
-        cliente.phone = form.phone.data
+        cliente.phone = (form.phone.data or '').strip()
+        cliente.id_number = (form.id_number.data or '').strip() or None
         medidas = extract_measurements_from_form(form)
-        cliente.measurements = cliente.measurements or {}
+        current_measures = dict(cliente.measurements or {})
         if medidas:
-            cliente.measurements[form.garment_type.data] = medidas
+            current_measures[form.garment_type.data] = medidas
+            cliente.measurements = current_measures
+            flag_modified(cliente, 'measurements')
+            changes_text = format_measure_diff(old_measures, medidas)
+            append_client_measurement_history(
+                cliente,
+                form.garment_type.data,
+                old_measures,
+                medidas,
+                current_user.username if current_user.is_authenticated else 'sistema'
+            )
+            # Propagar cambios a prendas en pedidos del cliente para este tipo
+            for pedido in cliente.custom_orders:
+                updated_items = []
+                for item in pedido.items.filter_by(garment_type=form.garment_type.data).all():
+                    if (item.measurements or {}) != medidas:
+                        item.measurements = medidas
+                        flag_modified(item, 'measurements')
+                        updated_items.append(item.id)
+                if updated_items:
+                    actor = current_user.name or current_user.username
+                    note = f'Medidas de cliente actualizadas por {actor} para {form.garment_type.data}'
+                    if changes_text:
+                        note += f' | Cambios: {changes_text}'
+                    append_custom_order_history(pedido, pedido.status, note, user=actor)
         db.session.commit()
         flash('Cliente actualizado.', 'success')
         return redirect(url_for('admin_clientes'))
@@ -2382,6 +3472,7 @@ def admin_cliente_editar(id):
 
 @app.route('/api/clientes/buscar')
 @login_required
+@permission_required('manage_clients')
 def api_clientes_buscar():
     """Buscar clientes por nombre o telefono"""
     term = (request.args.get('q') or '').strip()
@@ -2389,17 +3480,55 @@ def api_clientes_buscar():
         return jsonify([])
     like_term = f"%{term}%"
     results = Client.query.filter(
-        or_(Client.phone.ilike(like_term), Client.name.ilike(like_term))
+        Client.is_deleted == False,
+        or_(
+            Client.phone.ilike(like_term),
+            Client.name.ilike(like_term),
+            Client.id_number.ilike(like_term)
+        )
     ).order_by(Client.name).limit(8).all()
-    data = [{'id': c.id, 'name': c.name, 'phone': c.phone} for c in results]
+    data = [{'id': c.id, 'name': c.name, 'phone': c.phone, 'id_number': c.id_number} for c in results]
     return jsonify(data)
+
+
+@app.route('/api/clientes', methods=['POST'])
+@login_required
+def api_clientes_crear():
+    """Crear un cliente de forma rapida (para pedidos personalizados)."""
+    payload = request.get_json(force=True, silent=True) or {}
+    name = (payload.get('name') or '').strip()
+    phone = (payload.get('phone') or '').strip()
+    id_number = (payload.get('id_number') or '').strip()
+    if not name:
+        return jsonify({'error': 'El nombre es obligatorio'}), 400
+    existing = None
+    if phone:
+        existing = Client.query.filter(func.lower(Client.phone) == phone.lower()).first()
+    if not existing and id_number:
+        existing = Client.query.filter(func.lower(Client.id_number) == id_number.lower()).first()
+    if not existing:
+        existing = Client.query.filter(func.lower(Client.name) == name.lower()).first()
+    if existing:
+        return jsonify({'error': 'Ya existe un cliente con esos datos', 'id': existing.id}), 409
+    cliente = Client(name=name, phone=phone, id_number=id_number or None)
+    db.session.add(cliente)
+    db.session.commit()
+    return jsonify({
+        'id': cliente.id,
+        'name': cliente.name,
+        'phone': cliente.phone,
+        'id_number': cliente.id_number
+    }), 201
 
 
 @app.route('/api/clientes/<int:client_id>/medidas', methods=['GET', 'POST'])
 @login_required
 def api_cliente_medidas(client_id):
-    """Obtiene o guarda medidas por cliente"""
+    """Obtiene o guarda medidas por cliente."""
     cliente = Client.query.get_or_404(client_id)
+    can_manage = has_permission(current_user, 'manage_clients') or has_permission(current_user, 'manage_custom_orders') or getattr(current_user, 'is_superadmin', False)
+    if not can_manage:
+        abort(403)
     if request.method == 'GET':
         prenda = request.args.get('prenda')
         data = (cliente.measurements or {}).get(prenda or '', {}) if prenda else (cliente.measurements or {})
@@ -2410,8 +3539,10 @@ def api_cliente_medidas(client_id):
     medidas = payload.get('measurements') or {}
     if not prenda:
         abort(400, description='Falta el tipo de prenda')
-    cliente.measurements = cliente.measurements or {}
-    cliente.measurements[prenda] = medidas
+    current = dict(cliente.measurements or {})
+    current[prenda] = medidas
+    cliente.measurements = current
+    flag_modified(cliente, 'measurements')
     db.session.commit()
     return jsonify({'status': 'ok'})
 
@@ -2453,3 +3584,4 @@ if __name__ == '__main__':
         print('✓ Base de datos inicializada')
     
     app.run(host='0.0.0.0', port=5000, debug=True)
+

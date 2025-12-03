@@ -9,9 +9,16 @@
             <p class="text-muted small mb-1">Gestión de clientes</p>
             <h2 class="mb-0">Clientes</h2>
         </div>
-        <a href="{{ url_for('admin_cliente_nuevo') }}" class="btn btn-primary">
-            <i class="bi bi-person-plus"></i> Agregar cliente
-        </a>
+        <div class="d-flex gap-2">
+            {% if current_user.is_superadmin %}
+            <a href="{{ url_for('admin_clientes_papelera') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-trash"></i> Papelera
+            </a>
+            {% endif %}
+            <a href="{{ url_for('admin_cliente_nuevo') }}" class="btn btn-primary">
+                <i class="bi bi-person-plus"></i> Agregar cliente
+            </a>
+        </div>
     </div>
 
     <div class="card shadow-sm border-0">
@@ -22,6 +29,7 @@
                         <tr>
                             <th>Nombre</th>
                             <th>Teléfono</th>
+                            <th>Carnet/NIT</th>
                             <th>Medidas guardadas</th>
                             <th class="text-end">Acciones</th>
                         </tr>
@@ -31,6 +39,7 @@
                         <tr>
                             <td class="fw-semibold">{{ c.name }}</td>
                             <td>{{ c.phone }}</td>
+                            <td>{{ c.id_number or '-' }}</td>
                             <td>
                                 {% if c.measurements %}
                                     {{ c.measurements|length }} prenda(s)
@@ -45,11 +54,16 @@
                                 <a href="{{ url_for('admin_cliente_editar', id=c.id) }}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-pencil"></i> Editar
                                 </a>
+                                <form action="{{ url_for('admin_cliente_eliminar', id=c.id) }}" method="post" class="d-inline" onsubmit="return confirm('Eliminar este cliente y sus pedidos?');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="4" class="text-center py-4 text-muted">
+                            <td colspan="5" class="text-center py-4 text-muted">
                                 <i class="bi bi-inbox me-2"></i>No hay clientes registrados.
                             </td>
                         </tr>
@@ -81,10 +95,11 @@
                     </div>
                 </div>
                 <div class="row g-3 mt-3" id="modalMeasurements">
-                    {% for field in ['largo_espalda','largo_delantero','cintura','busto','media_cintura','sisa','escote','largo_manga','puno','cuello','abertura','ancho_espalda','figura','alforza','panos','wato','corridas','color','cadera','talla','quebrado'] %}
+                    {% for field in MEASUREMENT_FIELDS %}
+                    {% set is_color = field == 'color' %}
                     <div class="col-md-4 modal-measure" data-field="{{ field }}">
                         <label class="form-label text-capitalize">{{ field.replace('_',' ') }}</label>
-                        <input type="text" class="form-control" />
+                        <input type="text" class="form-control" {% if not is_color %}inputmode="decimal" pattern="^[0-9]+([\\.,][0-9]+)?$"{% endif %} />
                     </div>
                     {% endfor %}
                 </div>

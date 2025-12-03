@@ -1,0 +1,150 @@
+{% extends 'admin/base_admin.html' %}
+
+{% block title %}Prendas en taller - Modas Pathy{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <p class="text-muted small mb-1">Talleres confeccionando</p>
+      <h2 class="mb-0">Prendas en taller</h2>
+    </div>
+  </div>
+
+  <ul class="nav nav-pills mb-3" id="workshopTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active" id="tab-asignadas" data-bs-toggle="pill" data-bs-target="#pane-asignadas" type="button" role="tab">Asignadas</button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link" id="tab-recibidas" data-bs-toggle="pill" data-bs-target="#pane-recibidas" type="button" role="tab">Recibidas</button>
+    </li>
+  </ul>
+
+  <div class="tab-content">
+    <div class="tab-pane fade show active" id="pane-asignadas" role="tabpanel">
+      <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Prenda</th>
+                <th>Pedido / Cliente</th>
+                <th>Taller</th>
+                <th>Asignado</th>
+                <th>Entrega a tienda</th>
+                <th class="text-end">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in assigned_items %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ item.garment_type }}</div>
+                  <div class="small text-muted">ID prenda: {{ item.id }}</div>
+                </td>
+                <td>
+                  <div class="fw-semibold">{{ item.order.code }}</div>
+                  <div class="small text-muted">{{ item.order.client.name if item.order.client else '' }}</div>
+                </td>
+                <td>
+                  <div class="fw-semibold">{{ item.workshop.name if item.workshop else '-' }}</div>
+                  <div class="small text-muted">{{ item.workshop.phone if item.workshop else '' }}</div>
+                </td>
+                <td>
+                  {{ item.workshop_assigned_at.strftime('%d/%m/%Y %H:%M') if item.workshop_assigned_at else '-' }}
+                </td>
+                <td>
+                  {{ item.workshop_due_date.strftime('%d/%m/%Y') if item.workshop_due_date else '-' }}
+                </td>
+                <td class="text-end">
+                  <button class="btn btn-sm btn-outline-success btn-mark-received" data-item="{{ item.id }}">
+                    <i class="bi bi-box-arrow-in-down"></i> Recibido de taller
+                  </button>
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="text-center text-muted py-4">No hay prendas asignadas a taller.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-pane fade" id="pane-recibidas" role="tabpanel">
+      <div class="card shadow-sm border-0">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Prenda</th>
+                <th>Pedido / Cliente</th>
+                <th>Taller</th>
+                <th>Asignado</th>
+                <th>Recibido</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in received_items %}
+              <tr>
+                <td>
+                  <div class="fw-semibold">{{ item.garment_type }}</div>
+                  <div class="small text-muted">ID prenda: {{ item.id }}</div>
+                </td>
+                <td>
+                  <div class="fw-semibold">{{ item.order.code }}</div>
+                  <div class="small text-muted">{{ item.order.client.name if item.order.client else '' }}</div>
+                </td>
+                <td>
+                  <div class="fw-semibold">{{ item.workshop.name if item.workshop else '-' }}</div>
+                  <div class="small text-muted">{{ item.workshop.phone if item.workshop else '' }}</div>
+                </td>
+                <td>
+                  {{ item.workshop_assigned_at.strftime('%d/%m/%Y %H:%M') if item.workshop_assigned_at else '-' }}
+                </td>
+                <td>
+                  {{ item.workshop_returned_at.strftime('%d/%m/%Y %H:%M') if item.workshop_returned_at else '-' }}
+                </td>
+              </tr>
+              {% else %}
+              <tr><td colspan="5" class="text-center text-muted py-4">No hay prendas recibidas del taller.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = "{{ csrf_token() }}";
+document.querySelectorAll('.btn-mark-received').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const itemId = btn.dataset.item;
+        if (!confirm('Marcar esta prenda como recibida del taller?')) return;
+        try {
+            const resp = await fetch(`/api/custom-orders/items/${itemId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ status: 'recibido' })
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+                alert(data.error || 'No se pudo actualizar.');
+                return;
+            }
+            window.location.reload();
+        } catch (err) {
+            alert('Error de red al actualizar.');
+        }
+    });
+});
+</script>
+{% endblock %}

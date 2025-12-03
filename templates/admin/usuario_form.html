@@ -1,66 +1,125 @@
-{% extends 'admin/base_admin.html' %}
+﻿{% extends 'admin/base_admin.html' %}
 
 {% block title %}{{ 'Nuevo' if nuevo else 'Editar' }} Usuario — Modas Pathy{% endblock %}
 
 {% block content %}
-<div class="container-fluid" style="max-width: 600px;">
-    <div class="card">
-        <div class="card-body">
-            <h5 class="fw-bold mb-4">
-                <i class="bi bi-person me-2"></i>
-                {{ 'Nuevo Administrador' if nuevo else 'Editar Administrador' }}
-            </h5>
-            
-            <form method="post" enctype="multipart/form-data">
-                {{ form.hidden_tag() }}
-                
-                {% if not nuevo %}
-                <div class="text-center mb-4">
-                    <img src="{% if user.profile_image %}{{ url_for('static', filename='perfiles/' ~ user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}" 
-                         class="rounded-circle mb-2"
-                         style="width: 100px; height: 100px; object-fit: cover;">
+<style>
+    .admin-card { border: 1px solid #e8e8e8; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.04); }
+    .audit-timeline .item { border-left: 3px solid #e5e7eb; padding-left: 12px; margin-left: 6px; }
+    .audit-timeline .item.active { border-color: #2dd17a; background: #f5fdf8; }
+    .chip-perm { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 10px; background: #fff; width: 100%; }
+    .chip-perm input { margin-top: 2px; }
+    .chip-perm .label { font-weight: 600; }
+</style>
+<div class="container-fluid" style="max-width: 1000px;">
+    <div class="row g-4">
+        <div class="col-lg-7">
+            <div class="admin-card p-4 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <p class="text-muted small mb-0">Control de accesos</p>
+                        <h4 class="fw-bold mb-0">{{ 'Nuevo administrador' if nuevo else 'Editar administrador' }}</h4>
+                    </div>
+                    {% if not nuevo %}
+                    <div class="text-center">
+                        <img src="{% if user.profile_image %}{{ url_for('static', filename='perfiles/' ~ user.profile_image) }}{% else %}{{ url_for('static', filename='images/default-avatar.png') }}{% endif %}"
+                             class="rounded-circle border"
+                             style="width: 72px; height: 72px; object-fit: cover;">
+                        <div class="small text-muted mt-1">ID #{{ user.id }}</div>
+                    </div>
+                    {% endif %}
                 </div>
+
+                <form method="post" enctype="multipart/form-data" class="vstack gap-3">
+                    {{ form.hidden_tag() }}
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Nombre completo *</label>
+                            {{ form.name(class="form-control", placeholder="Nombre y apellido") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Usuario *</label>
+                            {{ form.username(class="form-control", placeholder="usuario") }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Contrasena {% if nuevo %}*{% else %}(dejar vacio para mantener){% endif %}</label>
+                            {{ form.password(class="form-control", placeholder="•••••••") }}
+                        </div>
+                        {% if not nuevo %}
+                        <div class="col-md-6">
+                            <label class="form-label">Confirmar contrasena</label>
+                            {{ form.password2(class="form-control", placeholder="•••••••") }}
+                        </div>
+                        {% endif %}
+                        <div class="col-md-6">
+                            <label class="form-label">Rol</label>
+                            {{ form.is_superadmin(class="form-control form-select") }}
+                            <small class="text-muted">Super admin = acceso total.</small>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Foto de perfil</label>
+                            {{ form.profile_image(class="form-control") }}
+                        </div>
+                    </div>
+
+                    {% if current_user.is_superadmin %}
+                    <div class="border rounded p-3">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <div>
+                                <span class="badge bg-success-subtle text-success border">Permisos</span>
+                                <div class="fw-semibold">Selecciona modulos habilitados</div>
+                                <small class="text-muted">Solo aplica a administradores (no super admin).</small>
+                            </div>
+                        </div>
+                        <div class="row g-2">
+                            {% for value, label in form.permissions.choices %}
+                            <div class="col-sm-6">
+                                <label class="chip-perm">
+                                    <input class="form-check-input" type="checkbox" name="{{ form.permissions.name }}" value="{{ value }}" {% if form.permissions.data and value in form.permissions.data %}checked{% endif %}>
+                                    <span class="label">{{ label }}</span>
+                                    <span class="text-muted small">{{ value }}</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle me-2"></i>Guardar
+                        </button>
+                        <a href="{{ url_for('admin_usuarios') }}" class="btn btn-light border">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="col-lg-5">
+            <div class="admin-card p-4 h-100">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h5 class="fw-bold mb-0">Historial de permisos</h5>
+                    <span class="badge bg-secondary-subtle text-secondary border">Auditoria</span>
+                </div>
+                {% if logs %}
+                    <div class="audit-timeline">
+                        {% for log in logs %}
+                        <div class="item mb-3 pb-2 {% if loop.first %}active{% endif %}">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-semibold">{{ log.changed_by }}</span>
+                                <span class="text-muted">{{ log.created_at.strftime('%d/%m/%Y %H:%M') if log.created_at else '' }}</span>
+                            </div>
+                            <div class="text-muted">Antes: {{ (log.permissions_before or [])|permission_labels|join(', ') or 'Sin permisos' }}</div>
+                            <div class="text-muted">Despues: {{ (log.permissions_after or [])|permission_labels|join(', ') or 'Sin permisos' }}</div>
+                            {% if log.note %}<div class="mt-1">{{ log.note }}</div>{% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-muted small">Aun no hay movimientos de permisos.</div>
                 {% endif %}
-                
-                <div class="form-group">
-                    <label class="form-label">Nombre completo *</label>
-                    {{ form.name(class="form-control", placeholder="Nombre y apellido") }}
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Usuario *</label>
-                    {{ form.username(class="form-control", placeholder="usuario") }}
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Contraseña {% if nuevo %}*{% else %}(dejar vacío para mantener){% endif %}</label>
-                    {{ form.password(class="form-control", placeholder="••••••••") }}
-                </div>
-                
-                {% if not nuevo %}
-                <div class="form-group">
-                    <label class="form-label">Confirmar Contraseña</label>
-                    {{ form.password2(class="form-control", placeholder="••••••••") }}
-                </div>
-                {% endif %}
-                
-                <div class="form-group">
-                    <label class="form-label">Rol</label>
-                    {{ form.is_superadmin(class="form-control form-select") }}
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Foto de perfil</label>
-                    {{ form.profile_image(class="form-control") }}
-                </div>
-                
-                <div class="d-flex gap-2 mt-4">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-check-circle me-2"></i>Guardar
-                    </button>
-                    <a href="{{ url_for('admin_usuarios') }}" class="btn btn-outline">Cancelar</a>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
 </div>
